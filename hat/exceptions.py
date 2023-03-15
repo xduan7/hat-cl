@@ -10,7 +10,7 @@ class HATInitializationError(Exception):
     pass
 
 
-class MaskerLockedException(Exception):
+class MaskerLockedError(Exception):
     """Raised when the masker is locked and therefore cannot be modified."""
 
     pass

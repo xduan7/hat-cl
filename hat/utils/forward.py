@@ -22,6 +22,7 @@ def _has_weight_param(module: nn.Module) -> bool:
 def forward_hat_payload(
     module: nn.Module,
     hat_payload: HATPayload,
+    use_masked_data: bool = True,
 ) -> HATPayload:
     """Forward the hard attention payload through the module.
 
@@ -38,12 +39,18 @@ def forward_hat_payload(
     4. The module is not a `HATPayloadCarrierMixin` and is not an instance of
         `nn.Sequential`, and the payload is task-specific: make sure that
         the module is not weighted, and perform the module forward pass on
-        the unmasked data. Return a `HATPayload` with the returned data and
+        the masked data or the unmasked data depending on the value of
+        `use_masked_data`. Return a `HATPayload` with the returned data and
         everything else from the input payload.
 
     Args:
         module: The module to forward the payload through.
         hat_payload: The hard attention payload to forward through the module.
+        use_masked_data: Whether to use the masked data in the payload. This
+            argument is only used when the payload is task-specific and the
+            module is not a `HATPayloadCarrierMixin`. When `True`, the masked
+            data will be used. When `False`, the unmasked data will be used.
+            Defaults to `True`.
 
     Returns:
         The payload returned by the module.
@@ -65,7 +72,6 @@ def forward_hat_payload(
             masker=hat_payload.masker,
             task_id=hat_payload.task_id,
             mask_scale=hat_payload.mask_scale,
-            prev_maskers=hat_payload.prev_maskers,
             locked_task_ids=hat_payload.locked_task_ids,
         )
     else:
@@ -85,13 +91,15 @@ def forward_hat_payload(
                 f"Passing a `HATPayload` to such a module might cause "
                 f"unexpected behavior."
             )
-        _data = module.forward(hat_payload.data)
+        if use_masked_data:
+            _data = module.forward(hat_payload.masked_data)
+        else:
+            _data = module.forward(hat_payload.unmasked_data)
         return HATPayload(
             data=_data,
             masker=hat_payload.masker,
             task_id=hat_payload.task_id,
             mask_scale=hat_payload.mask_scale,
-            prev_maskers=hat_payload.prev_maskers,
             locked_task_ids=hat_payload.locked_task_ids,
-            mask_applied=True,
+            mask_applied=use_masked_data,
         )

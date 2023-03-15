@@ -21,9 +21,9 @@ from hat.payload import HATPayload
 from hat.types_ import ForgetResult, HATConfig
 
 
-class HATPayloadCarrierMixin(ABC):
-    """Mixin class for anything that implements a `forward` method that
-    accepts `HATPayload` as the first argument and returns a another
+class HATPayloadCarrierMixin(nn.Module, ABC):
+    """Mixin class for PyTorch module that implements a `forward` method
+    that accepts `HATPayload` as the first argument and returns a another
     `HATPayload` instance.
 
     """
@@ -35,7 +35,6 @@ class HATPayloadCarrierMixin(ABC):
 
 
 class TaskDependentModuleABC(
-    nn.Module,
     TaskDependentMixin,
     HATPayloadCarrierMixin,
     ABC,
@@ -52,6 +51,7 @@ class TaskDependentModuleABC(
         self,
         task_id: int,
         dry_run: bool = False,
+        module_name: Optional[str] = None,
     ) -> ForgetResult:
         """Forget the given tasks by resetting the parameters that are
         solely associated with the given task.
@@ -69,6 +69,8 @@ class TaskDependentModuleABC(
                 even if the module accepts `None` as a task id.
             dry_run: If `True`, the forgetting process will be simulated
                 without actually changing the module. Defaults to `False`.
+            module_name: The name of the module. If `None`, the module name
+                will be inferred from the module class name.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -146,7 +148,7 @@ class TaskIndexedModuleListABC(
     def __init__(self, num_tasks: int, *args: Any, **kwargs: Any):
         super().__init__()
         for _ in range(num_tasks + 1):
-            self.append(self.base_class()(*args, **kwargs))
+            self.append(self.base_class(*args, **kwargs))
 
     @property
     def num_tasks(self) -> int:
@@ -220,7 +222,6 @@ class TaskIndexedModuleListABC(
             masker=pld.masker,
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
-            prev_maskers=pld.prev_maskers,
             locked_task_ids=pld.locked_task_ids,
             mask_applied=_mask_applied,
         )
@@ -350,7 +351,6 @@ class _HATMaskerModuleABC(
             masker=pld.masker,
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
-            prev_maskers=pld.prev_maskers,
             locked_task_ids=pld.locked_task_ids,
             mask_applied=True,
         )
@@ -382,6 +382,7 @@ class _HATMaskerModuleABC(
         self,
         task_id: int,
         dry_run: bool = False,
+        module_name: Optional[str] = None,
     ) -> ForgetResult:
         """Forget the task with the given task id.
 
@@ -400,6 +401,8 @@ class _HATMaskerModuleABC(
                 even if the module accepts `None` as a task id.
             dry_run: If `True`, the forgetting process will be simulated
                 without actually changing the module. Defaults to `False`.
+            module_name: The name of the module. If `None`, the module name
+                will be inferred from the module class name.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -418,6 +421,7 @@ class _HATMaskerModuleABC(
         _bias_change_pos = _forgettable_mask
         if not dry_run:
             # TODO: there are probably better way to reset the parameters
+            #  other than using normal distribution
             # Assume that weight is of shape [out, in, *]
             self.weight.data[_weight_change_pos] = self.weight.data[
                 _weight_change_pos
@@ -426,28 +430,36 @@ class _HATMaskerModuleABC(
                 self.bias.data[_bias_change_pos] = self.bias.data[
                     _bias_change_pos
                 ].normal_()
-        _base_forget_result = ForgetResult(
-            _weight_change_pos.sum().item(),
-            self.weight.numel(),
-        )
+        _fgt_num_weight = _weight_change_pos.sum().item()
+        _ttl_num_weight = self.weight.numel()
+        _module_name = module_name or self.__class__.__name__
+        _forget_result = {
+            f"{_module_name}.weight": (_fgt_num_weight, _ttl_num_weight)
+        }
+        _forget_num_params = _fgt_num_weight
         if self.bias is not None:
-            _base_forget_result += ForgetResult(
-                _bias_change_pos.sum().item(),
-                self.bias.numel(),
+            _fgt_num_bias = _bias_change_pos.sum().item()
+            _ttl_num_bias = self.bias.numel()
+            _forget_result[f"{_module_name}.bias"] = (
+                _fgt_num_bias,
+                _ttl_num_bias,
             )
-        if _base_forget_result.num_forgotten_params == 0:
+            _forget_num_params += _fgt_num_bias
+        _forget_result = ForgetResult(**_forget_result)
+        if _forget_num_params == 0:
             warnings.warn(
                 f"No parameters are forgotten for task {task_id}. "
-                f"This task might be locked behind other tasks that "
-                f"are not meant",
+                f"This task might be locked behind other tasks.",
                 NoParameterToForgetWarning,
             )
         # Masker must forget last because the masking information is
         # required for the base module to forget.
         _masker_forget_result = self.masker.forget(
-            task_id=task_id, dry_run=dry_run
+            task_id=task_id,
+            dry_run=dry_run,
+            module_name=f"{_module_name}.masker",
         )
-        return _base_forget_result + _masker_forget_result
+        return _forget_result + _masker_forget_result
 
     def load_from_base_module(self, base_module: nn.Module):
         """Load the weight/bias from the base module."""

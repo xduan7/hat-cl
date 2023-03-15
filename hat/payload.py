@@ -26,10 +26,6 @@ class HATPayload:
             is already masked, the masker is still needed in some cases.
         task_id: The ID of the task.
         mask_scale: The scale of the mask.
-        prev_maskers: The maskers used in the previous layers that are
-            associated with the generation of data. This is used to
-            determine the parameters for a certain task. Users should not
-            set this argument manually. Defaults to `None`.
         locked_task_ids: The IDs of the tasks that are locked. If set to
             `None`, all the trained tasks except the current one will be
             locked. By locking a task, we mean that the parameters
@@ -47,7 +43,6 @@ class HATPayload:
         masker: Optional[HATMasker] = None,
         task_id: Optional[int] = None,
         mask_scale: Optional[float] = None,
-        prev_maskers: Optional[list[HATMasker]] = None,
         locked_task_ids: Optional[Sequence[int]] = None,
         mask_applied: bool = False,
     ):
@@ -56,9 +51,13 @@ class HATPayload:
         self.masker = masker
         self.task_id = task_id
         self.mask_scale = mask_scale
-        self.prev_maskers = prev_maskers
         self.locked_task_ids = locked_task_ids
         self.mask_applied = mask_applied
+        # The maskers used in the previous layers that are associated with
+        # the generation of data. This is used to determine the parameters
+        # for a certain task. This field will be automatically set by the
+        # `HATMasker` instances during the forward pass.
+        self.prev_maskers: Optional[list[HATMasker]] = None
 
     @property
     def data(self) -> torch.Tensor:
@@ -86,13 +85,29 @@ class HATPayload:
         """The unmasked data if available."""
         return self._unmasked_data
 
-    def forward_by(self, module: nn.Module) -> HATPayload:
+    def forward_by(
+        self,
+        module: nn.Module,
+        use_masked_data: bool = True,
+    ) -> HATPayload:
         """Forward the payload through the given module.
 
         See `hat.utils.forward_hat_payload` for more details.
 
+        Args:
+            module: The module to be used for forwarding.
+            use_masked_data: Whether to use the masked data for forwarding.
+                Defaults to `True`.
+
+        Returns:
+            The forwarded payload.
+
         """
-        return forward_hat_payload(module=module, hat_payload=self)
+        return forward_hat_payload(
+            module=module,
+            hat_payload=self,
+            use_masked_data=use_masked_data,
+        )
 
     # TODO: operations
     # def __add__(self, other: HATPayload) -> HATPayload:
@@ -103,11 +118,10 @@ class HATPayload:
     #     pass
 
     def __repr__(self) -> str:
-        _prev_maskers = (
-            [repr(__m) for __m in self.prev_maskers]
-            if self.prev_maskers
-            else None
-        )
+        if self.prev_maskers is not None:
+            _prev_maskers = [repr(__m) for __m in self.prev_maskers]
+        else:
+            _prev_maskers = None
         return (
             f"HATPayload(\n"
             f"  data: {self.data}\n"

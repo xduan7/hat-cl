@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from typing import Any, Callable, Optional, Union
 
 import torch
@@ -10,7 +11,7 @@ from .constants import DEF_HAT_GRAD_COMP_CLAMP, DEF_HAT_MAX_TRN_MASK_SCALE
 Mask = Union[torch.FloatTensor, torch.BoolTensor]
 
 
-class HATConfig:
+class HATConfig(Mapping):
     """Configuration for HAT (Hard attention to the task) modules.
 
     Args:
@@ -37,6 +38,7 @@ class HATConfig:
         gate: Callable[[torch.Tensor], torch.Tensor] = torch.sigmoid,
         **kwargs: Any,  # For polymorphism reasons.
     ):
+        super().__init__()
         self.num_tasks = num_tasks
         self.mask_dim = mask_dim
         self.max_trn_mask_scale = max_trn_mask_scale
@@ -45,9 +47,13 @@ class HATConfig:
         if kwargs != {}:
             warnings.warn(f"Unrecognized kwargs: {kwargs}.")
 
-    def keys(self):
-        """Return the keys of the config. Useful for unpacking."""
-        return self.__dict__.keys()
+    def __len__(self) -> int:
+        """Return the length of the config. Useful for unpacking."""
+        return len(self.__dict__)
+
+    def __iter__(self):
+        """Return the iterator of the config. Useful for unpacking."""
+        return iter(self.__dict__)
 
     def __getitem__(self, item):
         """Return the value of the config. Useful for unpacking."""
@@ -66,45 +72,66 @@ class HATConfig:
         return self.__repr__()
 
 
-class ForgetResult:
+class ForgetResult(dict[str, tuple[int, int]]):
     """Result of forgetting a task of a task dependent module.
 
+    The result is a dictionary of the number of forgotten parameters and
+    the number of total parameters for each child module of the task
+    dependent module. The keys are the names of the parameters, e.g.,
+    'l0.weight' and 'layer[2].conv1.bias'.
+
     Args:
-        num_forgotten_params: Number of (non-mask) parameters forgotten.
-        num_trainable_params: Number of (non-mask) trainable parameters.
-        num_forgotten_mask_params: Number of mask parameters forgotten.
-        num_trainable_mask_params: Number of trainable mask parameters.
+        **kwargs: Forget result content as key-value pairs.
 
     """
 
     def __init__(
         self,
-        num_forgotten_params: int = 0,
-        num_trainable_params: int = 0,
-        num_forgotten_mask_params: int = 0,
-        num_trainable_mask_params: int = 0,
+        **kwargs: Any,
     ):
-        self.num_forgotten_params = num_forgotten_params
-        self.num_trainable_params = num_trainable_params
-        self.num_forgotten_mask_params = num_forgotten_mask_params
-        self.num_trainable_mask_params = num_trainable_mask_params
+        super().__init__()
+        for __k, __v in kwargs.items():
+            if (
+                isinstance(__k, str)
+                and isinstance(__v, tuple)
+                and len(__v) == 2
+                and isinstance(__v[0], int)
+                and isinstance(__v[1], int)
+            ):
+                self[__k] = __v  # type: ignore
+            else:
+                raise TypeError(
+                    f"Expected key to be a `str` and value to be a tuple "
+                    f"of two `int`s, but got {__k} and {__v}."
+                )
 
     def __add__(self, other: ForgetResult) -> ForgetResult:
-        return ForgetResult(
-            num_forgotten_params=self.num_forgotten_params
-            + other.num_forgotten_params,
-            num_trainable_params=self.num_trainable_params
-            + other.num_trainable_params,
-            num_forgotten_mask_params=self.num_forgotten_mask_params
-            + other.num_forgotten_mask_params,
-            num_trainable_mask_params=self.num_trainable_mask_params
-            + other.num_trainable_mask_params,
-        )
+        _keys = set(self.keys()) & set(other.keys())
+        if set(self.keys()) & set(other.keys()):
+            raise ValueError(
+                f"Cannot add two `ForgetResult` "
+                f"with the same keys: {_keys}."
+            )
+        return ForgetResult(**{**self, **other})
+
+    def __getitem__(self, key: str) -> tuple[int, int]:
+        if key in self:
+            return super().__getitem__(key)
+        else:
+            # Return a tuple consisting of the sum of the values of the
+            # keys that contain the given key.
+            _sum = (0, 0)
+            for __k, __v in self.items():
+                if key in __k.split("."):
+                    _sum = (_sum[0] + __v[0], _sum[1] + __v[1])
+            if _sum == (0, 0):
+                raise KeyError(f"Key {key} not found.")
+            return _sum
 
     def __repr__(self):
-        return (
-            f"Forgotten parameters: {self.num_forgotten_params} + "
-            f"{self.num_forgotten_mask_params} (mask) / "
-            f"Total trainable parameters: {self.num_trainable_params} + "
-            f"{self.num_trainable_mask_params} (mask)"
-        )
+        # print dict items with sorted names and tab
+        _repr = "ForgetResult(\n"
+        for __k, __v in sorted(self.items()):
+            _repr += f"  {__k}: {__v[0]}/{__v[1]}\n"
+        _repr = _repr + ")"
+        return _repr

@@ -3,7 +3,6 @@ from typing import Optional, Union
 
 from torch import nn
 
-from hat.types_ import HATConfig
 from hat.modules import (
     HATConv1d,
     HATConv2d,
@@ -12,17 +11,14 @@ from hat.modules import (
     TaskIndexedBatchNorm2d,
     TaskIndexedBatchNorm3d,
 )
-from . import (
-    check_to_base_conversion,
+from hat.types_ import HATConfig
+from tests.constants import DEBUG, DROPOUT_RATE, NUM_TASKS
+from tests.conversion import (
     check_from_base_conversion,
-    check_remembering,
-    check_locking,
-    check_forgetting,
-    set_up,
-    DEBUG,
-    NUM_TASKS,
-    DROPOUT_RATE,
+    check_to_base_conversion,
 )
+from tests.task import check_forgetting, check_locking, check_remembering
+from tests.utils import set_up
 
 CONV1D_INPUT_SHAPE = (2,) if DEBUG else (64,)
 CONV2D_INPUT_SHAPE = (2, 2) if DEBUG else (8, 8)

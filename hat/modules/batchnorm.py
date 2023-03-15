@@ -4,6 +4,7 @@ from abc import ABC
 from copy import deepcopy
 from typing import Any, Optional
 
+from torch import classproperty
 from torch import nn as nn
 
 # noinspection PyProtectedMember
@@ -12,7 +13,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from hat.payload import HATPayload
 
 from ._base import ForgetResult, TaskIndexedModuleListABC
-from .utils import get_num_params, register_mapping
+from .utils import register_mapping
 
 
 class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
@@ -41,6 +42,7 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
         self,
         task_id: int,
         dry_run: bool = False,
+        module_name: Optional[str] = None,
     ) -> ForgetResult:
         """Forget the given tasks by resetting the parameters of the
         batch normalization module of the given task.
@@ -50,23 +52,28 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
                 even if the module accepts `None` as a task id.
             dry_run: If `True`, the forgetting process will be simulated
                 without actually changing the module. Defaults to `False`.
+            module_name: The name of the module. If `None`, the module name
+                will be inferred from the module class name.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
             details.
 
         """
-        _num_forgotten_params = 0
-        _num_trainable_params = get_num_params(self)
         if not dry_run:
             self[task_id].reset_parameters()
-        _num_forgotten_params += get_num_params(self[task_id])
         # `running_mean` and `running_var` are not parameters, as they are
         # not included in `self.parameters()`, but `weight` and `bias` are.
-        return ForgetResult(
-            num_forgotten_params=_num_forgotten_params,
-            num_trainable_params=_num_trainable_params,
-        )
+        _fgt_num_weight = self[task_id].weight.numel()
+        _fgt_num_bias = self[task_id].bias.numel()
+        _ttl_num_weight = _fgt_num_weight * len(self)
+        _ttl_num_bias = _fgt_num_bias * len(self)
+        _module_name = module_name or self.__class__.__name__
+        _forget_result = {
+            f"{_module_name}.weight": (_fgt_num_weight, _ttl_num_weight),
+            f"{_module_name}.bias": (_fgt_num_bias, _ttl_num_bias),
+        }
+        return ForgetResult(**_forget_result)
 
     def to_base_module(
         self,
@@ -120,7 +127,25 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
                 "creating a task-dependent batch normalization layer "
                 "from a base module."
             )
-        _ti_bn = cls(num_tasks=num_tasks, **kwargs)
+        if base_module.affine:
+            _device = base_module.weight.device
+            _dtype = base_module.weight.dtype
+        elif base_module.track_running_stats:
+            _device = base_module.running_mean.device
+            _dtype = base_module.running_mean.dtype
+        else:
+            _device = None
+            _dtype = None
+        _ti_bn = cls(
+            num_tasks=num_tasks,
+            num_features=base_module.num_features,
+            eps=base_module.eps,
+            momentum=base_module.momentum,
+            affine=base_module.affine,
+            track_running_stats=base_module.track_running_stats,
+            device=_device,
+            dtype=_dtype,
+        )
         _ti_bn.load_from_base_module(base_module)
         return _ti_bn
 
@@ -141,6 +166,7 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
 class TaskIndexedBatchNorm1d(_TaskIndexedBatchNorm):
     """Task-indexed 1D batch normalization layer."""
 
+    @classproperty
     def base_class(self) -> type[nn.Module]:
         """Base class of task-indexed batch normalization 1D."""
         return nn.BatchNorm1d  # type: ignore
@@ -150,6 +176,7 @@ class TaskIndexedBatchNorm1d(_TaskIndexedBatchNorm):
 class TaskIndexedBatchNorm2d(_TaskIndexedBatchNorm):
     """Task-indexed 2D batch normalization layer."""
 
+    @classproperty
     def base_class(self) -> type[nn.Module]:
         """Base class of task-indexed batch normalization 2D."""
         return nn.BatchNorm2d  # type: ignore
@@ -159,6 +186,7 @@ class TaskIndexedBatchNorm2d(_TaskIndexedBatchNorm):
 class TaskIndexedBatchNorm3d(_TaskIndexedBatchNorm):
     """Task-indexed 3D batch normalization layer."""
 
+    @classproperty
     def base_class(self) -> type[nn.Module]:
         """Base class of task-indexed batch normalization 3D."""
         return nn.BatchNorm3d  # type: ignore

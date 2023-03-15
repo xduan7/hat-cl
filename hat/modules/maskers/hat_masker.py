@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch import classproperty
 
-from hat.exceptions import HATInitializationError, MaskerLockedException
+from hat.exceptions import HATInitializationError, MaskerLockedError
 from hat.modules._base import HATModuleABC, HATPayloadCarrierMixin
 from hat.modules.utils import register_mapping
 from hat.payload import HATPayload
@@ -190,15 +190,16 @@ class HATMasker(
                         mask_scale=pld.mask_scale,
                     )
         _prev_maskers = self._get_prev_maskers(pld=pld)
-        return HATPayload(
+        pld = HATPayload(
             # The mask only applies to the data when requested, not here.
             data=pld.data,
             masker=self,
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
-            prev_maskers=_prev_maskers,
             locked_task_ids=pld.locked_task_ids,
         )
+        pld.prev_maskers = _prev_maskers
+        return pld
 
     def get_mask(
         self,
@@ -269,7 +270,7 @@ class HATMasker(
             locked_task_ids = self._infer_locked_task_ids(task_id)
         else:
             if task_id in locked_task_ids:
-                raise MaskerLockedException(
+                raise MaskerLockedError(
                     f"Current task ID {task_id} is in the "
                     f"locked task ID list {locked_task_ids}."
                 )
@@ -284,6 +285,7 @@ class HATMasker(
         self,
         task_id: int,
         dry_run: bool = False,
+        module_name: Optional[str] = None,
     ) -> ForgetResult:
         """Forget the given task ID by reinitializing the attention.
 
@@ -291,26 +293,31 @@ class HATMasker(
             task_id: The ID of the task to be forgotten. Cannot be `None`.
             dry_run: If `True`, the forgetting process will be simulated
                 without actually changing the module. Defaults to `False`.
+            module_name: The name of the module. If `None`, the module name
+                will be inferred from the module class name.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
             details.
 
         """
-        _num_forgotten_params = self.attention[task_id].numel()
+
         if task_id not in self.trained_task_ids:
             raise IndexError(
                 f"Untrained task ID {task_id} cannot be forgotten."
             )
         if not dry_run:
             self.attention[task_id].data.normal_()
-        _num_trainable_params = sum(
-            __p.numel() for __p in self.attention if __p.requires_grad
-        )
-        return ForgetResult(
-            num_forgotten_mask_params=_num_forgotten_params,
-            num_trainable_mask_params=_num_trainable_params,
-        )
+        _fgt_num_attention = self.attention[task_id].numel()
+        _ttl_num_attention = _fgt_num_attention * self.num_tasks
+        _module_name = module_name or self.__class__.__name__
+        _forget_result = {
+            f"{_module_name}.attention": (
+                _fgt_num_attention,
+                _ttl_num_attention,
+            ),
+        }
+        return ForgetResult(**_forget_result)
 
     def get_forgettable_mask(
         self,

@@ -1,6 +1,7 @@
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
 	@echo "    test:        unit test all test_*.py or *_test.py files"
+	@echo "    coverage:    generate coverage report"
 	@echo "    format:      check the format"
 	@echo "    lint:        check the lint"
 	@echo "    type:        check the type hints"
@@ -8,6 +9,11 @@ help:
 	@echo "    check:       run format, lint, type, doc"
 
 test:
+	@echo ">>> Unit testing with pytest ..."
+	@pytest || true
+	@echo ""
+
+coverage:
 	@echo ">>> Unit testing with pytest ..."
 	@coverage run -m pytest || true
 	@echo ">>> Generating coverage report ..."
@@ -21,7 +27,7 @@ type:
 
 format:
 	@echo ">>> Sorting imports with isort ..."
-	@isort hat || true
+	@isort . || true
 	@echo ">>> Formatting with black ...."
 	@black . || true
 	@echo ""

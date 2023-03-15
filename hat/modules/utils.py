@@ -23,8 +23,3 @@ def register_mapping(cls):
     else:
         mapping[cls.base_class] = cls
     return cls
-
-
-def get_num_params(module: nn.Module) -> int:
-    """Get the number of parameters in a module."""
-    return sum(p.numel() for p in module.parameters())

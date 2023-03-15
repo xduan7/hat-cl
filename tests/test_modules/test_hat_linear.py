@@ -3,20 +3,15 @@ from typing import Optional
 
 from torch import nn
 
-from hat.types_ import HATConfig
 from hat.modules import HATLinear, TaskIndexedBatchNorm1d
-from . import (
-    check_to_base_conversion,
+from hat.types_ import HATConfig
+from tests.constants import DEBUG, DROPOUT_RATE, NUM_TASKS
+from tests.conversion import (
     check_from_base_conversion,
-    check_remembering,
-    check_locking,
-    check_forgetting,
-    set_up,
-    DEBUG,
-    NUM_TASKS,
-    DROPOUT_RATE,
+    check_to_base_conversion,
 )
-
+from tests.task import check_forgetting, check_locking, check_remembering
+from tests.utils import set_up
 
 INPUT_DIM = 8 if DEBUG else 128
 OUTPUT_DIM = 6 if DEBUG else 32
