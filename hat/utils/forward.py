@@ -3,6 +3,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch.nn as nn
 
+# noinspection PyProtectedMember
+from hat.modules._base import HATPayloadCarrierMixin
+
 if TYPE_CHECKING:
     from hat.payload import HATPayload
 else:
@@ -56,8 +59,6 @@ def forward_hat_payload(
         The payload returned by the module.
 
     """
-    # noinspection PyProtectedMember
-    from hat.modules._base import HATPayloadCarrierMixin
     from hat.payload import HATPayload
 
     if isinstance(module, HATPayloadCarrierMixin):
@@ -73,6 +74,7 @@ def forward_hat_payload(
             task_id=hat_payload.task_id,
             mask_scale=hat_payload.mask_scale,
             locked_task_ids=hat_payload.locked_task_ids,
+            prev_maskers=hat_payload.prev_maskers,
         )
     else:
         from hat.modules.utils import base_to_task_dependent_mapping as mapping
@@ -101,5 +103,6 @@ def forward_hat_payload(
             task_id=hat_payload.task_id,
             mask_scale=hat_payload.mask_scale,
             locked_task_ids=hat_payload.locked_task_ids,
+            prev_maskers=hat_payload.prev_maskers,
             mask_applied=use_masked_data,
         )

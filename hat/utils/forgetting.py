@@ -4,6 +4,9 @@ from typing import Optional
 import torch.nn as nn
 
 from hat.exceptions import NoParameterToForgetWarning
+
+# noinspection PyProtectedMember
+from hat.modules._base import TaskDependentModuleABC
 from hat.types_ import ForgetResult
 
 
@@ -29,9 +32,6 @@ def forget_task(
         details.
 
     """
-    # noinspection PyProtectedMember
-    from hat.modules._base import TaskDependentModuleABC
-
     if isinstance(module, TaskDependentModuleABC):
         return module.forget(
             task_id=task_id,

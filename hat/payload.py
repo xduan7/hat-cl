@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import torch
 import torch.nn as nn
 
-from hat.utils import forward_hat_payload
+from .utils import forward_hat_payload
 
 if TYPE_CHECKING:
-    from .modules.maskers import HATMasker
+    from .modules.maskers.hat_masker import HATMasker
 else:
     HATMasker = nn.Module
 
@@ -31,6 +31,10 @@ class HATPayload:
             locked. By locking a task, we mean that the parameters
             associated with the task will not be updated. Defaults to
             `None`.
+        prev_maskers: The maskers used in the previous layers that are
+            associated with the generation of data. This field will
+            be automatically set by the `HATMasker` instances during the
+            forward pass. Defaults to `None`.
         mask_applied: Whether the mask has been applied to the data. If
             `True`, the data will be considered as masked. Defaults to
             `False`.
@@ -44,6 +48,7 @@ class HATPayload:
         task_id: Optional[int] = None,
         mask_scale: Optional[float] = None,
         locked_task_ids: Optional[Sequence[int]] = None,
+        prev_maskers: Optional[list[HATMasker]] = None,
         mask_applied: bool = False,
     ):
         self._masked_data = data if mask_applied else None
@@ -52,12 +57,8 @@ class HATPayload:
         self.task_id = task_id
         self.mask_scale = mask_scale
         self.locked_task_ids = locked_task_ids
+        self.prev_maskers = prev_maskers
         self.mask_applied = mask_applied
-        # The maskers used in the previous layers that are associated with
-        # the generation of data. This is used to determine the parameters
-        # for a certain task. This field will be automatically set by the
-        # `HATMasker` instances during the forward pass.
-        self.prev_maskers: Optional[list[HATMasker]] = None
 
     @property
     def data(self) -> torch.Tensor:

@@ -129,6 +129,7 @@ class HATBasicBlock(BasicBlock, HATPayloadCarrierMixin):
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
             locked_task_ids=pld.locked_task_ids,
+            prev_maskers=pld.prev_maskers,
         )
         pld = pld.forward_by(self.act2)
         return pld

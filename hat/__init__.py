@@ -6,4 +6,5 @@ __all__ = [
     "HATPayload",
     "HATConfig",
     "modules",
+    "models",
 ]

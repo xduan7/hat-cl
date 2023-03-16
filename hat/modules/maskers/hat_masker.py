@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import Any, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
@@ -11,11 +11,15 @@ from torch import classproperty
 from hat.exceptions import HATInitializationError, MaskerLockedError
 from hat.modules._base import HATModuleABC, HATPayloadCarrierMixin
 from hat.modules.utils import register_mapping
-from hat.payload import HATPayload
 from hat.types_ import ForgetResult, HATConfig, Mask
 
 from ._base import VectorMaskerABC
 from .attention_masker import AttentionMasker
+
+if TYPE_CHECKING:
+    from hat.payload import HATPayload
+else:
+    HATPayload = Any
 
 
 class _HATMakerRegulator:
@@ -26,18 +30,21 @@ class _HATMakerRegulator:
 
     def __init__(self, marker: HATMasker):
         self.marker = marker
-        self.depth: Optional[int] = None
-        self.desired_utils: Optional[dict[int, float]] = None
-        self.desired_masks: Optional[list[dict[int, torch.Tensor]]] = None
+        # self.depth: Optional[int] = None
+        # self.desired_utils: Optional[dict[int, float]] = None
+        # self.desired_masks: Optional[list[dict[int, torch.Tensor]]] = None
+
+    @property
+    def quota(self) -> float:
+        return self.marker.num_features / self.marker.num_tasks
 
     def get_reg_term(
         self,
-        reg_strategy: Literal["uniform", "heuristic"],
-        *args: Any,
+        reg_strategy: Literal["uniform"],
         **kwargs: Any,
     ) -> float:
         if reg_strategy == "uniform":
-            return self.get_uniform_reg_term(*args, **kwargs)
+            return self.get_uniform_reg_term(**kwargs)
         # elif reg_strategy == "heuristic":
         #     return self.get_heuristic_reg_term(*args, **kwargs)
         else:
@@ -49,6 +56,7 @@ class _HATMakerRegulator:
         self,
         task_id: int,
         mask_scale: Optional[float],
+        forgive_quota: bool = True,
         locked_task_ids: Optional[Sequence[int]] = None,
     ) -> float:
         """Get the uniform regularization term.
@@ -64,6 +72,9 @@ class _HATMakerRegulator:
         Args:
             task_id: The ID of the current task.
             mask_scale: The scale of the mask.
+            forgive_quota: Whether to forgive the quota of the task. If set
+                to `True`, the quota of the task will not count towards the
+                regularization term.
             locked_task_ids: The IDs of the tasks that are locked. Check
                 `HATMaker.get_locked_mask` for more details.
 
@@ -71,18 +82,17 @@ class _HATMakerRegulator:
             [1] https://arxiv.org/abs/1801.01423 (Equation 5)
 
         """
-        _masks = self.marker.get_mask(task_id=task_id, mask_scale=mask_scale)
+        _mask = self.marker.get_mask(task_id=task_id, mask_scale=mask_scale)
         _locked_mask = self.marker.get_locked_mask(
             task_id=task_id,
             locked_task_ids=locked_task_ids,
         )
-        _aux = 1.0 - _locked_mask
-        _reg = (_masks * _aux).sum()
+        _aux = 1.0 - _locked_mask.float()
+        _reg = (_mask * _aux).sum()
+        if forgive_quota:
+            _reg = max(_reg - self.quota, 0.0)
         _ttl = _aux.sum()
         return float(_reg / _ttl)
-
-    # def get_heuristic_reg_term(self) -> float:
-    #     pass
 
 
 @register_mapping
@@ -130,6 +140,7 @@ class HATMasker(
         self._grad_comp_clamp = hat_config.grad_comp_clamp
         self._gate = hat_config.gate
 
+        self._depth: Optional[int] = None
         self._task_trained = nn.Parameter(
             torch.zeros(_num_tasks, dtype=torch.bool, device=device),
             requires_grad=False,
@@ -146,6 +157,27 @@ class HATMasker(
     def num_tasks(self) -> int:
         """The max number of tasks accepted by the module."""
         return len(self.attention)
+
+    @property
+    def num_features(self) -> int:
+        """The number of features in the input."""
+        return self.attention[0].shape[0]  # type: ignore
+
+    @property
+    def depth(self) -> int:
+        """The depth of the masker in the HAT module."""
+        if self._depth is not None:
+            return self._depth
+        if self._prev_maskers is None:
+            raise ValueError(
+                "The masker is not initialized. Please use "
+                "the `forward` method to initialize the masker."
+            )
+        if len(self._prev_maskers) == 0:
+            self._depth = 0
+        else:
+            self._depth = self._prev_maskers[0].depth + 1
+        return self._depth
 
     @property
     def trained_task_ids(self) -> list[int]:
@@ -169,6 +201,8 @@ class HATMasker(
             The forwarded payload.
 
         """
+        from hat.payload import HATPayload
+
         if self.training:
             if pld.mask_scale is None:
                 raise ValueError(
@@ -197,6 +231,7 @@ class HATMasker(
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
             locked_task_ids=pld.locked_task_ids,
+            prev_maskers=_prev_maskers,
         )
         pld.prev_maskers = _prev_maskers
         return pld
@@ -242,8 +277,9 @@ class HATMasker(
             The binary mask tensor.
         """
         if task_id not in self._cached_binary_mask:
-            self._cached_binary_mask[task_id] = torch.BoolTensor(
-                self.attention[task_id] > 0
+            self._cached_binary_mask[task_id] = torch.tensor(
+                self.attention[task_id] > 0,
+                dtype=torch.bool,
             )
         return self._cached_binary_mask[task_id]
 
@@ -390,7 +426,7 @@ class HATMasker(
                 "once."
             )
         if len(self._prev_maskers) == 0:
-            return torch.ones(1).bool()
+            return torch.ones(1, device=self.attention[0].device).bool()
         _prev_incl_masks, _prev_excl_masks = [], []
         for __prev_masker in self._prev_maskers:
             (
@@ -483,6 +519,28 @@ class HATMasker(
         """
         for __attn in self.attention:
             __attn.data.copy_(base_module.attention.data)
+
+    def get_reg_term(
+        self,
+        reg_strategy: Literal["uniform"],
+        **kwargs: Any,
+    ) -> float:
+        """Get the regularization term for the HAT masker.
+
+        Args:
+            reg_strategy: The regularization strategy. See
+                `_HATRegulator.get_reg_term()` for details.
+            **kwargs: Additional keyword arguments to be passed to the
+                regularization function.
+
+        Returns:
+            The regularization term for the HAT masker.
+
+        """
+        return self.regulator.get_reg_term(
+            reg_strategy=reg_strategy,
+            **kwargs,
+        )
 
     def _register_grad_mod_hooks(
         self,

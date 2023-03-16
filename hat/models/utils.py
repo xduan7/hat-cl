@@ -5,7 +5,7 @@ import torch.nn as nn
 from hat.exceptions import ModuleConversionWarning
 
 # noinspection PyProtectedMember
-from hat.modules._base import HATPayloadCarrierMixin, TaskDependentModuleABC
+from hat.modules._base import HATPayloadCarrierMixin
 from hat.utils import convert_to_task_dependent_module
 
 

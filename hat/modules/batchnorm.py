@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from copy import deepcopy
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from torch import classproperty
 from torch import nn as nn
@@ -10,10 +10,13 @@ from torch import nn as nn
 # noinspection PyProtectedMember
 from torch.nn.modules.batchnorm import _BatchNorm
 
-from hat.payload import HATPayload
-
 from ._base import ForgetResult, TaskIndexedModuleListABC
 from .utils import register_mapping
+
+if TYPE_CHECKING:
+    from hat.payload import HATPayload
+else:
+    HATPayload = Any
 
 
 class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):

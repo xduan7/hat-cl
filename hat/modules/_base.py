@@ -6,7 +6,7 @@ from __future__ import annotations
 import functools
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -17,8 +17,12 @@ from hat.exceptions import (
     LearningSuppressedWarning,
     NoParameterToForgetWarning,
 )
-from hat.payload import HATPayload
 from hat.types_ import ForgetResult, HATConfig
+
+if TYPE_CHECKING:
+    from hat.payload import HATPayload
+else:
+    HATPayload = Any
 
 
 class HATPayloadCarrierMixin(nn.Module, ABC):
@@ -210,6 +214,8 @@ class TaskIndexedModuleListABC(
             The forwarded payload.
 
         """
+        from hat.payload import HATPayload
+
         if use_masked_data or pld.unmasked_data is None:
             _mask_applied = True
             _data = pld.masked_data
@@ -223,10 +229,13 @@ class TaskIndexedModuleListABC(
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
             locked_task_ids=pld.locked_task_ids,
+            prev_maskers=pld.prev_maskers,
             mask_applied=_mask_applied,
         )
 
     def __getitem__(self, key: Union[Optional[int], HATPayload]) -> nn.Module:
+        from hat.payload import HATPayload
+
         if isinstance(key, HATPayload):
             key = key.task_id
         if key is None:
@@ -314,7 +323,7 @@ class _HATMaskerModuleABC(
         dtype: Optional[torch.dtype] = None,
         **kwargs,
     ):
-        from hat.modules.maskers import HATMasker
+        from .maskers import HATMasker
 
         super().__init__(**kwargs)
         self.masker = HATMasker(
@@ -346,12 +355,15 @@ class _HATMaskerModuleABC(
             The forwarded payload.
 
         """
+        from hat.payload import HATPayload
+
         _pld = HATPayload(
             data=self.base_class.forward(self, pld.data),
             masker=pld.masker,
             task_id=pld.task_id,
             mask_scale=pld.mask_scale,
             locked_task_ids=pld.locked_task_ids,
+            prev_maskers=pld.prev_maskers,
             mask_applied=True,
         )
         if (

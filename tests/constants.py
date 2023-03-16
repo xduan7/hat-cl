@@ -6,7 +6,13 @@ from hat.constants import DEF_HAT_MAX_TRN_MASK_SCALE
 
 DEBUG = False
 RANDOM_SEED = 0
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
+    # As of PyTorch 1.13.1, MPS might cause wrong results.
+    # else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 BATCH_SIZE = 2
 

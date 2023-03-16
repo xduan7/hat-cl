@@ -83,7 +83,7 @@ def check_from_base_conversion(
     _module_ref = convert_to_task_dependent_module(
         module=deepcopy(_module),
         num_tasks=NUM_TASKS,
-    )
+    ).to(device)
     check_fully_task_dependent(
         test_case=test_case,
         module=_module_ref,
