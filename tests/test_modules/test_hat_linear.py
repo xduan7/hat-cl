@@ -10,7 +10,12 @@ from tests.conversion import (
     check_from_base_conversion,
     check_to_base_conversion,
 )
-from tests.task import check_forgetting, check_locking, check_remembering
+from tests.task import (
+    check_forgetting,
+    check_locking,
+    check_pruning,
+    check_remembering,
+)
 from tests.utils import set_up
 
 INPUT_DIM = 8 if DEBUG else 128
@@ -148,6 +153,13 @@ class TestHATLinear(unittest.TestCase):
             module=_get_single_layer_hat_linear(),
         )
 
+    def test_single_layer_pruning(self):
+        check_pruning(
+            test_case=self,
+            input_shape=(INPUT_DIM,),
+            module=_get_single_layer_hat_linear(),
+        )
+
     def test_multi_layer_to_base_conversion(self):
         check_to_base_conversion(
             test_case=self,
@@ -188,6 +200,13 @@ class TestHATLinear(unittest.TestCase):
 
     def test_multi_layer_forgetting(self):
         check_forgetting(
+            test_case=self,
+            input_shape=(INPUT_DIM,),
+            module=_get_multi_layer_hat_linear(),
+        )
+
+    def test_multi_layer_pruning(self):
+        check_pruning(
             test_case=self,
             input_shape=(INPUT_DIM,),
             module=_get_multi_layer_hat_linear(),

@@ -4,6 +4,7 @@ from abc import ABC
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Optional
 
+import torch
 from torch import classproperty
 from torch import nn as nn
 
@@ -46,6 +47,7 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
         task_id: int,
         dry_run: bool = False,
         module_name: Optional[str] = None,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> ForgetResult:
         """Forget the given tasks by resetting the parameters of the
         batch normalization module of the given task.
@@ -57,6 +59,9 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
                 without actually changing the module. Defaults to `False`.
             module_name: The name of the module. If `None`, the module name
                 will be inferred from the module class name.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. This is ignored here, as forgetting
+                of a task does not affect the other tasks.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -67,14 +72,18 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
             self[task_id].reset_parameters()
         # `running_mean` and `running_var` are not parameters, as they are
         # not included in `self.parameters()`, but `weight` and `bias` are.
-        _fgt_num_weight = self[task_id].weight.numel()
-        _fgt_num_bias = self[task_id].bias.numel()
-        _ttl_num_weight = _fgt_num_weight * len(self)
-        _ttl_num_bias = _fgt_num_bias * len(self)
+        _weight_forget_result = torch.zeros(
+            (len(self), self[task_id].weight.numel()), dtype=torch.bool
+        )
+        _weight_forget_result[task_id, :] = True
+        _bias_forget_result = torch.zeros(
+            (len(self), self[task_id].bias.numel()), dtype=torch.bool
+        )
+        _bias_forget_result[task_id, :] = True
         _module_name = module_name or self.__class__.__name__
         _forget_result = {
-            f"{_module_name}.weight": (_fgt_num_weight, _ttl_num_weight),
-            f"{_module_name}.bias": (_fgt_num_bias, _ttl_num_bias),
+            f"{_module_name}.weight": _weight_forget_result,
+            f"{_module_name}.bias": _bias_forget_result,
         }
         return ForgetResult(**_forget_result)
 

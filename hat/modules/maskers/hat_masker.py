@@ -277,10 +277,7 @@ class HATMasker(
             The binary mask tensor.
         """
         if task_id not in self._cached_binary_mask:
-            self._cached_binary_mask[task_id] = torch.tensor(
-                self.attention[task_id] > 0,
-                dtype=torch.bool,
-            )
+            self._cached_binary_mask[task_id] = self.attention[task_id] > 0
         return self._cached_binary_mask[task_id]
 
     def get_locked_mask(
@@ -322,6 +319,7 @@ class HATMasker(
         task_id: int,
         dry_run: bool = False,
         module_name: Optional[str] = None,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> ForgetResult:
         """Forget the given task ID by reinitializing the attention.
 
@@ -331,6 +329,9 @@ class HATMasker(
                 without actually changing the module. Defaults to `False`.
             module_name: The name of the module. If `None`, the module name
                 will be inferred from the module class name.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. This is ignored here, as forgetting
+                of a task does not affect the other tasks.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -344,20 +345,20 @@ class HATMasker(
             )
         if not dry_run:
             self.attention[task_id].data.normal_()
-        _fgt_num_attention = self.attention[task_id].numel()
-        _ttl_num_attention = _fgt_num_attention * self.num_tasks
+        _attention_forget_result = torch.zeros(
+            (self.num_tasks, self.attention[task_id].numel()), dtype=torch.bool
+        )
+        _attention_forget_result[task_id, :] = True
         _module_name = module_name or self.__class__.__name__
         _forget_result = {
-            f"{_module_name}.attention": (
-                _fgt_num_attention,
-                _ttl_num_attention,
-            ),
+            f"{_module_name}.attention": _attention_forget_result
         }
         return ForgetResult(**_forget_result)
 
     def get_forgettable_mask(
         self,
         task_id: int,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> tuple[Mask, Mask, Mask]:
         """Helper method to get the masks that are used to locate the
         parameters that solely belong to the given task ID by checking
@@ -376,6 +377,10 @@ class HATMasker(
 
         Args:
             task_id: The ID of the task.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. If set to `None`, the locked task IDs
+                will be inferred from the trained task IDs. See
+                `_infer_locked_task_ids()` for more details.
 
         Returns:
             The forgettable mask, inclusive mask, and exclusive mask.
@@ -384,7 +389,11 @@ class HATMasker(
 
         _inclusive_mask = self.get_binary_mask(task_id)
         # All the tasks other than the ones to be forgotten are locked.
-        _locked_task_ids = self._infer_locked_task_ids(task_id)
+        _locked_task_ids = (
+            self._infer_locked_task_ids(task_id)
+            if locked_task_ids is None
+            else locked_task_ids
+        )
         if len(_locked_task_ids) == 0:
             _exclusive_mask = torch.zeros_like(self.attention[0]).bool()
         else:
@@ -400,6 +409,7 @@ class HATMasker(
     def get_prev_forgettable_mask(
         self,
         task_id: int,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> Mask:
         """Helper method to get the mask that is used to locate the
         parameters that are associated with the given task ID by checking
@@ -414,6 +424,10 @@ class HATMasker(
 
         Args:
             task_id: The ID of the task.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. If set to `None`, the locked task IDs
+                will be inferred from the trained task IDs. See
+                `_infer_locked_task_ids()` for more details.
 
         Returns:
             The forgettable mask of the previous maskers.
@@ -433,7 +447,10 @@ class HATMasker(
                 _,
                 __prev_incl_mask,
                 __prev_excl_mask,
-            ) = __prev_masker.get_forgettable_mask(task_id)
+            ) = __prev_masker.get_forgettable_mask(
+                task_id=task_id,
+                locked_task_ids=locked_task_ids,
+            )
             _prev_incl_masks.append(__prev_incl_mask)
             _prev_excl_masks.append(__prev_excl_mask)
 

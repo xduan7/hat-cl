@@ -13,7 +13,7 @@ from torch.nn.modules.conv import _ConvNd
 
 from hat.types_ import HATConfig
 
-from ._base import _HATMaskerModuleABC
+from ._base import HATMaskedModuleABC
 from .utils import register_mapping
 
 
@@ -34,7 +34,7 @@ _pair = _ntuple(2, "_pair")
 _triple = _ntuple(3, "_triple")
 
 
-class _HATConvNdABC(_HATMaskerModuleABC, ABC):
+class _HATConvNdABC(HATMaskedModuleABC, ABC):
     """Abstract class for HAT convolutional layers.
 
     It implements all the methods for the HAT convolutional layers except for
@@ -80,7 +80,8 @@ class _HATConvNdABC(_HATMaskerModuleABC, ABC):
             dtype=self.weight.dtype,
         )
         _convnd.weight.data.copy_(self.weight.data)
-        _convnd.bias.data.copy_(self.bias.data)
+        if self.bias is not None:
+            _convnd.bias.data.copy_(self.bias.data)
         _masker = self.masker.to_base_module(
             task_id=task_id,
             **kwargs,

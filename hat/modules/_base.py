@@ -56,6 +56,7 @@ class TaskDependentModuleABC(
         task_id: int,
         dry_run: bool = False,
         module_name: Optional[str] = None,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> ForgetResult:
         """Forget the given tasks by resetting the parameters that are
         solely associated with the given task.
@@ -75,6 +76,10 @@ class TaskDependentModuleABC(
                 without actually changing the module. Defaults to `False`.
             module_name: The name of the module. If `None`, the module name
                 will be inferred from the module class name.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. Defaults to `None`, in which case
+                the module will lock all the tasks that have been trained
+                except the task id to be forgotten.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -288,7 +293,7 @@ class HATModuleABC(
         raise NotImplementedError
 
 
-class _HATMaskerModuleABC(
+class HATMaskedModuleABC(
     HATModuleABC,
     HATPayloadCarrierMixin,
     ABC,
@@ -395,6 +400,7 @@ class _HATMaskerModuleABC(
         task_id: int,
         dry_run: bool = False,
         module_name: Optional[str] = None,
+        locked_task_ids: Optional[list[int]] = None,
     ) -> ForgetResult:
         """Forget the task with the given task id.
 
@@ -415,6 +421,10 @@ class _HATMaskerModuleABC(
                 without actually changing the module. Defaults to `False`.
             module_name: The name of the module. If `None`, the module name
                 will be inferred from the module class name.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. Defaults to `None`, in which case
+                the module will lock all the tasks that have been trained
+                except the task id to be forgotten.
 
         Returns:
             The forgetting result. See `hat.types_.ForgetResult` for more
@@ -422,10 +432,12 @@ class _HATMaskerModuleABC(
 
         """
         _forgettable_mask, _, _ = self.masker.get_forgettable_mask(
-            task_id=task_id
+            task_id=task_id,
+            locked_task_ids=locked_task_ids,
         )
         _prev_forgettable_mask = self.masker.get_prev_forgettable_mask(
-            task_id=task_id
+            task_id=task_id,
+            locked_task_ids=locked_task_ids,
         ).expand(self.weight.shape[1])
         _weight_change_pos = torch.outer(
             _forgettable_mask, _prev_forgettable_mask
@@ -442,21 +454,12 @@ class _HATMaskerModuleABC(
                 self.bias.data[_bias_change_pos] = self.bias.data[
                     _bias_change_pos
                 ].normal_()
-        _fgt_num_weight = _weight_change_pos.sum().item()
-        _ttl_num_weight = self.weight.numel()
         _module_name = module_name or self.__class__.__name__
-        _forget_result = {
-            f"{_module_name}.weight": (_fgt_num_weight, _ttl_num_weight)
-        }
-        _forget_num_params = _fgt_num_weight
+        _forget_result = {f"{_module_name}.weight": _weight_change_pos}
+        _forget_num_params = _weight_change_pos.sum().item()
         if self.bias is not None:
-            _fgt_num_bias = _bias_change_pos.sum().item()
-            _ttl_num_bias = self.bias.numel()
-            _forget_result[f"{_module_name}.bias"] = (
-                _fgt_num_bias,
-                _ttl_num_bias,
-            )
-            _forget_num_params += _fgt_num_bias
+            _forget_result[f"{_module_name}.bias"] = _bias_change_pos
+            _forget_num_params += _bias_change_pos.sum().item()
         _forget_result = ForgetResult(**_forget_result)
         if _forget_num_params == 0:
             warnings.warn(

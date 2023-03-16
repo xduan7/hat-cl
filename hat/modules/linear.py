@@ -8,13 +8,13 @@ from torch import classproperty
 
 from hat.types_ import HATConfig
 
-from ._base import _HATMaskerModuleABC
+from ._base import HATMaskedModuleABC
 from .utils import register_mapping
 
 
 @register_mapping
 class HATLinear(
-    _HATMaskerModuleABC,
+    HATMaskedModuleABC,
     nn.Linear,
 ):
     """HAT linear layer.

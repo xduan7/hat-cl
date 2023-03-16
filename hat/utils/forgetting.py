@@ -15,6 +15,7 @@ def forget_task(
     task_id: int,
     dry_run: bool = False,
     module_name: Optional[str] = None,
+    locked_task_ids: Optional[list[int]] = None,
 ) -> ForgetResult:
     """Forget the given tasks of a given module by calling the `forget`
     function of all `TaskDependentModuleABC` children of the module.
@@ -26,6 +27,10 @@ def forget_task(
             without actually changing the module. Defaults to `False`.
         module_name: The name of the module. If `None`, the module name
                 will be inferred from the module class name.
+        locked_task_ids: The list of task ids that are locked and
+            cannot be forgotten. Defaults to `None`, in which case
+            the module will lock all the tasks that have been trained
+            except the task id to be forgotten.
 
     Returns:
         The forgetting result. See `hat.types_.ForgetResult` for more
@@ -37,6 +42,7 @@ def forget_task(
             task_id=task_id,
             dry_run=dry_run,
             module_name=module_name,
+            locked_task_ids=locked_task_ids,
         )
     else:
         # When some of the children modules can forget while others cannot,
@@ -54,16 +60,17 @@ def forget_task(
                     task_id=task_id,
                     dry_run=dry_run,
                     module_name=f"{_module_name}.{__n}",
+                    locked_task_ids=locked_task_ids,
                 )
         # If "weight" and "bias" exist and both are zero, then we presumably
         # warn the user that no parameter is forgotten.
         _fgt_num_params = 0
         try:
-            _fgt_num_params += _forget_result["weight"][0]
+            _fgt_num_params += _forget_result.get_num_forgotten("weight")[0]
         except KeyError:
             pass
         try:
-            _fgt_num_params += _forget_result["bias"][0]
+            _fgt_num_params += _forget_result.get_num_forgotten("bias")[0]
         except KeyError:
             pass
         if _fgt_num_params == 0:

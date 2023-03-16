@@ -10,6 +10,7 @@ from tests.task import (
     check_forgetting,
     check_fully_task_dependent,
     check_locking,
+    check_pruning,
     check_remembering,
 )
 from tests.utils import set_up
@@ -54,6 +55,13 @@ class TestHATResNet(unittest.TestCase):
             module=timm.create_model("hat_resnet18", hat_config=HAT_CONFIG),
         )
 
+    def test_hat_resnet18_pruning(self):
+        check_pruning(
+            test_case=self,
+            input_shape=RESNET_INPUT_SHAPE,
+            module=timm.create_model("hat_resnet18", hat_config=HAT_CONFIG),
+        )
+
     def test_hat_resnet18s_fully_task_dependent(self):
         check_fully_task_dependent(
             test_case=self,
@@ -78,5 +86,12 @@ class TestHATResNet(unittest.TestCase):
         check_forgetting(
             test_case=self,
             input_shape=RESNET_S_INPUT_SHAPE,
+            module=timm.create_model("hat_resnet18s", hat_config=HAT_CONFIG),
+        )
+
+    def test_hat_resnet18s_pruning(self):
+        check_pruning(
+            test_case=self,
+            input_shape=RESNET_INPUT_SHAPE,
             module=timm.create_model("hat_resnet18s", hat_config=HAT_CONFIG),
         )

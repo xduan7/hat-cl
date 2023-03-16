@@ -11,7 +11,7 @@ from hat.exceptions import NoParameterToForgetWarning
 # noinspection PyProtectedMember
 from hat.modules._base import TaskDependentModuleABC
 from hat.payload import HATPayload
-from hat.utils import forget_task
+from hat.utils import forget_task, prune_hat_module
 
 from .constants import (
     BATCH_SIZE,
@@ -210,6 +210,46 @@ def check_forgetting(
     )
 
 
+def check_pruning(
+    test_case: unittest.TestCase,
+    input_shape: Iterable[int],
+    module: nn.Module,
+    device: torch.device = DEVICE,
+):
+    """Check if the pruned network can produce the same output as the
+    original network.
+    """
+    _module_ref = module.to(device)
+    _module_ref.train()
+    _optim = OPTIMIZERS["SGD"](_module_ref.parameters())
+    for __task_id in range(NUM_TASKS):
+        _optim.zero_grad()
+        __pld = HATPayload(
+            data=torch.rand(BATCH_SIZE, *input_shape).to(device),
+            task_id=__task_id,
+            mask_scale=TRN_MASK_SCALE,
+        )
+        __data = __pld.forward_by(_module_ref).data
+        __data.sum().backward()
+        _optim.step()
+        _optim.zero_grad()
+    _module_ref.eval()
+    for __task_id in range(NUM_TASKS):
+        __module = deepcopy(_module_ref)
+        __module, _forget_result = prune_hat_module(__module, __task_id)
+        __pld = HATPayload(
+            data=torch.rand(BATCH_SIZE, *input_shape).to(device),
+            task_id=__task_id,
+            mask_scale=None,
+        )
+        __data = __pld.forward_by(__module).data
+        __data_ref = __pld.forward_by(_module_ref).data
+        test_case.assertTrue(
+            torch.allclose(__data, __data_ref),
+            f"The output of task {__task_id} changed after pruning.",
+        )
+
+
 def check_fully_task_dependent(
     test_case: unittest.TestCase,
     module: nn.Module,
@@ -223,3 +263,15 @@ def check_fully_task_dependent(
                 check_fully_task_dependent(test_case, __m),
                 f"Module {__n} is not fully task-dependent.",
             )
+
+
+def check_fully_torch(
+    test_case: unittest.TestCase,
+    module: nn.Module,
+):
+    """Check if a module is fully torch."""
+    for __n, __m in module.named_children():
+        if isinstance(__m, TaskDependentModuleABC):
+            test_case.fail(f"Module {__n} is task-dependent.")
+        else:
+            check_fully_torch(test_case, __m)

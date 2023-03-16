@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any, Callable, Optional, Union
 
 import torch
@@ -72,13 +73,13 @@ class HATConfig(Mapping):
         return self.__repr__()
 
 
-class ForgetResult(dict[str, tuple[int, int]]):
+class ForgetResult(dict[str, torch.BoolTensor]):
     """Result of forgetting a task of a task dependent module.
 
-    The result is a dictionary of the number of forgotten parameters and
-    the number of total parameters for each child module of the task
-    dependent module. The keys are the names of the parameters, e.g.,
-    'l0.weight' and 'layer[2].conv1.bias'.
+    This class is essentially a dictionary that maps from the name of a
+    parameter (e.g., 'l0.weight' and 'layer[2].conv1.bias'.) to
+    `torch.BoolTensor`, which indicates whether the corresponding parameter
+    is forgotten or not (1 for forgotten).
 
     Args:
         **kwargs: Forget result content as key-value pairs.
@@ -91,47 +92,53 @@ class ForgetResult(dict[str, tuple[int, int]]):
     ):
         super().__init__()
         for __k, __v in kwargs.items():
-            if (
-                isinstance(__k, str)
-                and isinstance(__v, tuple)
-                and len(__v) == 2
-                and isinstance(__v[0], int)
-                and isinstance(__v[1], int)
-            ):
-                self[__k] = __v  # type: ignore
+            if isinstance(__k, str) and isinstance(__v, torch.BoolTensor):
+                self[__k] = __v
             else:
                 raise TypeError(
-                    f"Expected key to be a `str` and value to be a tuple "
-                    f"of two `int`s, but got {__k} and {__v}."
+                    f"Expected key to be a `str` and value to be a "
+                    f"`torch.BoolTensor`, but got {__k} and {__v}."
                 )
 
-    def __add__(self, other: ForgetResult) -> ForgetResult:
-        _keys = set(self.keys()) & set(other.keys())
-        if set(self.keys()) & set(other.keys()):
-            raise ValueError(
-                f"Cannot add two `ForgetResult` "
-                f"with the same keys: {_keys}."
-            )
-        return ForgetResult(**{**self, **other})
+    def get_num_forgotten(self, keyword: str) -> tuple[int, int]:
+        """Get the number of forgotten parameters and the total number of
+        parameters that contain the given keyword.
 
-    def __getitem__(self, key: str) -> tuple[int, int]:
-        if key in self:
-            return super().__getitem__(key)
+        Args:
+            keyword: The keyword to search for, e.g., 'weight'.
+
+        Returns:
+            A tuple consisting of the number of forgotten parameters and the
+            total number of parameters that contain the given keyword.
+
+        """
+        if keyword in self:
+            __t = self[keyword]
+            return __t.sum().item(), __t.numel()
         else:
             # Return a tuple consisting of the sum of the values of the
             # keys that contain the given key.
             _sum = (0, 0)
             for __k, __v in self.items():
-                if key in __k.split("."):
-                    _sum = (_sum[0] + __v[0], _sum[1] + __v[1])
+                if keyword in __k.split("."):
+                    _sum = (_sum[0] + __v.sum().item(), _sum[1] + __v.numel())
             if _sum == (0, 0):
-                raise KeyError(f"Key {key} not found.")
+                raise KeyError(f"Keyword {keyword} not found.")
             return _sum
+
+    def __add__(self, other: ForgetResult) -> ForgetResult:
+        _sum = deepcopy(self)
+        for __k, __v in other.items():
+            if __k in _sum:
+                _sum[__k] = torch.logical_or(_sum[__k], __v)
+            else:
+                _sum[__k] = __v
+        return _sum
 
     def __repr__(self):
         # print dict items with sorted names and tab
         _repr = "ForgetResult(\n"
         for __k, __v in sorted(self.items()):
-            _repr += f"  {__k}: {__v[0]}/{__v[1]}\n"
+            _repr += f"  {__k}: {__v.sum().item()}/{__v.numel()}\n"
         _repr = _repr + ")"
         return _repr
