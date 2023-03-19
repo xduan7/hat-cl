@@ -83,7 +83,7 @@ class AttentionMasker(VectorMaskerABC):
                     "Please set the `trn_mask_scale` attribute or "
                     "pass the `mask_scale` as an argument."
                 )
-            return torch.BoolTensor(self.attention > 0)
+            return self.attention > 0
         else:
             return self.gate(self.attention * mask_scale)
 

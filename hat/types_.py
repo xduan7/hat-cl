@@ -92,7 +92,11 @@ class ForgetResult(dict[str, torch.BoolTensor]):
     ):
         super().__init__()
         for __k, __v in kwargs.items():
-            if isinstance(__k, str) and isinstance(__v, torch.BoolTensor):
+            if (
+                isinstance(__k, str)
+                and isinstance(__v, torch.Tensor)
+                and __v.dtype == torch.bool
+            ):
                 self[__k] = __v
             else:
                 raise TypeError(

@@ -3,7 +3,7 @@ import unittest
 import timm
 
 # noinspection PyUnresolvedReferences
-import hat.models
+import hat.networks
 from hat.types_ import HATConfig
 from tests.constants import DEBUG, DROPOUT_RATE, NUM_TASKS
 from tests.task import (

@@ -24,11 +24,12 @@ def get_hat_reg_term(
     """
     from hat.modules import HATMasker
 
-    _reg = 0.0
+    _reg, _cnt = 0.0, 0
     for __m in module.modules():
         if isinstance(__m, HATMasker):
             _reg += __m.get_reg_term(
                 reg_strategy=reg_strategy,
                 **kwargs,
             )
-    return _reg
+            _cnt += 1
+    return _reg / _cnt if _cnt > 0 else 0.0

@@ -10,15 +10,7 @@ from hat.utils import convert_to_base_module, convert_to_task_dependent_module
 
 from .constants import BATCH_SIZE, DEVICE, NUM_TASKS, TRN_MASK_SCALE
 from .task import check_fully_task_dependent
-
-
-def _deactivate_dropout(module: nn.Module):
-    if not module.training:
-        return
-    if isinstance(module, nn.Dropout):
-        module.eval()
-    for __m in module.children():
-        _deactivate_dropout(__m)
+from .utils import deactivate_dropout
 
 
 def check_to_base_conversion(
@@ -44,8 +36,8 @@ def check_to_base_conversion(
             _module.train(__training)
             __module_ref.train(__training)
             # Dropout needs to be disabled if we want to compare the output.
-            _deactivate_dropout(_module)
-            _deactivate_dropout(__module_ref)
+            deactivate_dropout(_module)
+            deactivate_dropout(__module_ref)
             _pld = HATPayload(
                 data=torch.rand(BATCH_SIZE, *input_shape).to(device),
                 task_id=__task_id,
@@ -92,8 +84,8 @@ def check_from_base_conversion(
         _module.train(__training)
         _module_ref.train(__training)
         # Dropout needs to be disabled if we want to compare the output.
-        _deactivate_dropout(_module)
-        _deactivate_dropout(_module_ref)
+        deactivate_dropout(_module)
+        deactivate_dropout(_module_ref)
         _pld = HATPayload(
             data=torch.rand(BATCH_SIZE, *input_shape).to(device),
             task_id=_task_id,

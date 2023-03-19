@@ -28,21 +28,21 @@ class _HATMakerRegulator:
 
     """
 
-    def __init__(self, marker: HATMasker):
-        self.marker = marker
+    def __init__(self, masker: HATMasker):
+        self.masker = masker
         # self.depth: Optional[int] = None
         # self.desired_utils: Optional[dict[int, float]] = None
         # self.desired_masks: Optional[list[dict[int, torch.Tensor]]] = None
 
     @property
     def quota(self) -> float:
-        return self.marker.num_features / self.marker.num_tasks
+        return self.masker.num_features / self.masker.num_tasks
 
     def get_reg_term(
         self,
         reg_strategy: Literal["uniform"],
         **kwargs: Any,
-    ) -> float:
+    ) -> torch.Tensor:
         if reg_strategy == "uniform":
             return self.get_uniform_reg_term(**kwargs)
         # elif reg_strategy == "heuristic":
@@ -58,7 +58,7 @@ class _HATMakerRegulator:
         mask_scale: Optional[float],
         forgive_quota: bool = True,
         locked_task_ids: Optional[Sequence[int]] = None,
-    ) -> float:
+    ) -> torch.Tensor:
         """Get the uniform regularization term.
 
         This regularization term penalizes usage of the mask elements of the
@@ -82,8 +82,8 @@ class _HATMakerRegulator:
             [1] https://arxiv.org/abs/1801.01423 (Equation 5)
 
         """
-        _mask = self.marker.get_mask(task_id=task_id, mask_scale=mask_scale)
-        _locked_mask = self.marker.get_locked_mask(
+        _mask = self.masker.get_mask(task_id=task_id, mask_scale=mask_scale)
+        _locked_mask = self.masker.get_locked_mask(
             task_id=task_id,
             locked_task_ids=locked_task_ids,
         )
@@ -92,7 +92,7 @@ class _HATMakerRegulator:
         if forgive_quota:
             _reg = max(_reg - self.quota, 0.0)
         _ttl = _aux.sum()
-        return float(_reg / _ttl)
+        return _reg / _ttl
 
 
 @register_mapping
@@ -134,7 +134,7 @@ class HATMasker(
                 for _ in range(_num_tasks)
             ]
         )
-        self.regulator = _HATMakerRegulator(marker=self)
+        self.regulator = _HATMakerRegulator(masker=self)
 
         self._max_trn_mask_scale = hat_config.max_trn_mask_scale
         self._grad_comp_clamp = hat_config.grad_comp_clamp
@@ -203,10 +203,11 @@ class HATMasker(
         """
         from hat.payload import HATPayload
 
-        if self.training:
+        if self.training and torch.is_grad_enabled():
             if pld.mask_scale is None:
                 raise ValueError(
-                    "The mask scale must be specified during training."
+                    "The mask scale must be specified during "
+                    "training and when gradient is enabled."
                 )
             elif pld.mask_scale > self._max_trn_mask_scale:  # type: ignore
                 warnings.warn(
@@ -215,14 +216,13 @@ class HATMasker(
                     "due to insufficient gradient compensation.",
                     RuntimeWarning,
                 )
-            if torch.is_grad_enabled():
-                if pld.task_id is not None:
-                    self._task_trained[pld.task_id] = True
-                    self._cached_binary_mask.pop(pld.task_id, None)
-                    self._register_grad_mod_hooks(
-                        task_id=pld.task_id,
-                        mask_scale=pld.mask_scale,
-                    )
+            if pld.task_id is not None:
+                self._task_trained[pld.task_id] = True
+                self._cached_binary_mask.pop(pld.task_id, None)
+                self._register_grad_mod_hooks(
+                    task_id=pld.task_id,
+                    mask_scale=pld.mask_scale,
+                )
         _prev_maskers = self._get_prev_maskers(pld=pld)
         pld = HATPayload(
             # The mask only applies to the data when requested, not here.
@@ -541,7 +541,7 @@ class HATMasker(
         self,
         reg_strategy: Literal["uniform"],
         **kwargs: Any,
-    ) -> float:
+    ) -> torch.Tensor:
         """Get the regularization term for the HAT masker.
 
         Args:
@@ -575,14 +575,16 @@ class HATMasker(
 
         """
         self.remove_grad_mod_hooks()
+        _grad_mod_hook = functools.partial(
+            self._compensate_attention_grad,
+            attention=self.attention[task_id],
+            mask_scale=mask_scale,
+            max_trn_mask_scale=self._max_trn_mask_scale,
+            grad_comp_clamp=self._grad_comp_clamp,
+        )
+        _grad_mod_hook.__torch_unserializable__ = True  # type: ignore
         _grad_comp_hook_handle = self.attention[task_id].register_hook(
-            functools.partial(
-                self._compensate_attention_grad,
-                attention=self.attention[task_id],
-                mask_scale=mask_scale,
-                max_trn_mask_scale=self._max_trn_mask_scale,
-                grad_comp_clamp=self._grad_comp_clamp,
-            )
+            _grad_mod_hook
         )
         self._grad_mod_hook_handles.append(_grad_comp_hook_handle)
 
