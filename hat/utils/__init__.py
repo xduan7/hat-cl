@@ -6,6 +6,7 @@ from .forgetting import forget_task
 from .forward import forward_hat_payload
 from .pruning import prune_hat_module
 from .regularization import get_hat_reg_term
+from .scaling import get_hat_mask_scale
 
 __all__ = [
     "convert_to_base_module",
@@ -14,4 +15,5 @@ __all__ = [
     "forward_hat_payload",
     "prune_hat_module",
     "get_hat_reg_term",
+    "get_hat_mask_scale",
 ]

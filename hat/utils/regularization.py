@@ -5,14 +5,14 @@ import torch.nn as nn
 
 def get_hat_reg_term(
     module: nn.Module,
-    reg_strategy: Literal["uniform"],
+    reg_strat: Literal["uniform"],
     **kwargs: Any,
 ) -> float:
     """Get the regularization term of a HAT maskers in the given module.
 
     Args:
         module: The module to get the regularization term from.
-        reg_strategy: The regularization strategy to use. See
+        reg_strat: The regularization strategy to use. See
             `hat.modules.HATMasker.get_reg_term` for more details.
         **kwargs: Keyword arguments to be passed to the regularization
             strategy. See `hat.modules.HATMasker.get_reg_term` for more
@@ -28,7 +28,7 @@ def get_hat_reg_term(
     for __m in module.modules():
         if isinstance(__m, HATMasker):
             _reg += __m.get_reg_term(
-                reg_strategy=reg_strategy,
+                reg_strat=reg_strat,
                 **kwargs,
             )
             _cnt += 1

@@ -55,3 +55,9 @@ class NoParameterToForgetWarning(UserWarning):
     """
 
     pass
+
+
+class InsufficientMaskWarning(UserWarning):
+    """Raised when the mask is not sufficient for all the tasks."""
+
+    pass

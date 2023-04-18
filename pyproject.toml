@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "HAT (Hard Attention to the Task) Modules for Continual Learning"
 authors = ["Xiaotian Duan <xduan7@gmail.com>"]
 license = "MIT"
-readme = "README.md"
+readme = "readme.md"
 packages = [{include = "hat"}]
 
 [tool.poetry.dependencies]
@@ -32,6 +32,7 @@ pysnooper = "^1.1.1"
 interrogate = "^1.5.0"
 coverage-badge = "^1.1.0"
 sphinx = "^6.1.3"
+# Notebook example dependencies
 jupyter = "^1.0.0"
 avalanche-lib = "^0.3.1"
 fastapi = "^0.86.0"

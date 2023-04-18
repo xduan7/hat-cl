@@ -204,6 +204,10 @@ def check_forgetting(
     # problem in real applications because there won't be as much mask
     # sharing with the right regularization, and a deeper network can always
     # find a layer that might forget a task.
+    print(
+        f"Failed to forget {(_failed_forgetting_count / _total_forgetting_count) * 100:.2f}% "
+        f"of the tasks."
+    )
     test_case.assertTrue(
         (_failed_forgetting_count / _total_forgetting_count) < 1,
         f"Failed to forget all {NUM_TASKS} tasks.",

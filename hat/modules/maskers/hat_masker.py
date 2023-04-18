@@ -4,11 +4,16 @@ import functools
 import warnings
 from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
 
+import scipy
 import torch
 import torch.nn as nn
 from torch import classproperty
 
-from hat.exceptions import HATInitializationError, MaskerLockedError
+from hat.exceptions import (
+    HATInitializationError,
+    InsufficientMaskWarning,
+    MaskerLockedError,
+)
 from hat.modules._base import HATModuleABC, HATPayloadCarrierMixin
 from hat.modules.utils import register_mapping
 from hat.types_ import ForgetResult, HATConfig, Mask
@@ -40,17 +45,15 @@ class _HATMakerRegulator:
 
     def get_reg_term(
         self,
-        reg_strategy: Literal["uniform"],
+        reg_strat: Literal["uniform"],
         **kwargs: Any,
     ) -> torch.Tensor:
-        if reg_strategy == "uniform":
+        if reg_strat == "uniform":
             return self.get_uniform_reg_term(**kwargs)
-        # elif reg_strategy == "heuristic":
+        # elif reg_strat == "heuristic":
         #     return self.get_heuristic_reg_term(*args, **kwargs)
         else:
-            raise ValueError(
-                f"Unknown regularization strategy: {reg_strategy}"
-            )
+            raise ValueError(f"Unknown regularization strategy: {reg_strat}")
 
     def get_uniform_reg_term(
         self,
@@ -88,9 +91,19 @@ class _HATMakerRegulator:
             locked_task_ids=locked_task_ids,
         )
         _aux = 1.0 - _locked_mask.float()
+        if _aux.sum() == 0.0:
+            # In this case, the mask completely locked by previous tasks,
+            # and we don't need to penalize it further.
+            # Note that this is not differentiable, so it must be used in
+            # combination with other loss terms.
+            return _aux.sum()
         _reg = (_mask * _aux).sum()
         if forgive_quota:
-            _reg = max(_reg - self.quota, 0.0)
+            _reg = _reg - self.quota
+            # No need to penalize the task if it is already within the quota.
+            # Use multiplication instead of `max` for backpropagation.
+            if _reg < 0.0:
+                _reg = 0.0 * _reg
         _ttl = _aux.sum()
         return _reg / _ttl
 
@@ -126,17 +139,26 @@ class HATMasker(
     ):
         super().__init__(hat_config.mask_dim)
         _num_tasks = hat_config.num_tasks
+        if _num_tasks > num_features:
+            warnings.warn(
+                f"The number of tasks ({_num_tasks}) is greater than the "
+                f"number of features ({num_features}), which leads to "
+                f"some tasks not being able to learn new features.",
+                InsufficientMaskWarning,
+            )
         self.attention = nn.ParameterList(
             [
                 nn.Parameter(
-                    torch.randn(num_features, device=device, dtype=dtype)
+                    torch.zeros(num_features, device=device, dtype=dtype)
                 )
                 for _ in range(_num_tasks)
             ]
         )
+        self._init_attention(strat=hat_config.init_strat)
         self.regulator = _HATMakerRegulator(masker=self)
 
         self._max_trn_mask_scale = hat_config.max_trn_mask_scale
+        self._attn_clamp = hat_config.attn_clamp
         self._grad_comp_clamp = hat_config.grad_comp_clamp
         self._gate = hat_config.gate
 
@@ -219,6 +241,10 @@ class HATMasker(
             if pld.task_id is not None:
                 self._task_trained[pld.task_id] = True
                 self._cached_binary_mask.pop(pld.task_id, None)
+                self.attention[pld.task_id].data.clamp_(
+                    min=-self._attn_clamp,
+                    max=self._attn_clamp,
+                )
                 self._register_grad_mod_hooks(
                     task_id=pld.task_id,
                     mask_scale=pld.mask_scale,
@@ -344,7 +370,9 @@ class HATMasker(
                 f"Untrained task ID {task_id} cannot be forgotten."
             )
         if not dry_run:
-            self.attention[task_id].data.normal_()
+            self._task_trained[task_id] = False
+            self._cached_binary_mask.pop(task_id, None)
+            self._init_attention(task_id=task_id)
         _attention_forget_result = torch.zeros(
             (self.num_tasks, self.attention[task_id].numel()), dtype=torch.bool
         )
@@ -539,13 +567,13 @@ class HATMasker(
 
     def get_reg_term(
         self,
-        reg_strategy: Literal["uniform"],
+        reg_strat: Literal["uniform"],
         **kwargs: Any,
     ) -> torch.Tensor:
         """Get the regularization term for the HAT masker.
 
         Args:
-            reg_strategy: The regularization strategy. See
+            reg_strat: The regularization strategy. See
                 `_HATRegulator.get_reg_term()` for details.
             **kwargs: Additional keyword arguments to be passed to the
                 regularization function.
@@ -555,9 +583,57 @@ class HATMasker(
 
         """
         return self.regulator.get_reg_term(
-            reg_strategy=reg_strategy,
+            reg_strat=reg_strat,
             **kwargs,
         )
+
+    def _init_attention(
+        self,
+        strat: str = "normal",
+        task_id: Optional[int] = None,
+    ):
+        """Initialize the attention.
+
+        This function will initialize the attention for the given task (or
+        all the tasks if the task ID is `None`) with the given strategy.
+
+        Args:
+            strat: The initialization strategy. If `sparse`, the
+                attention will be initialized with a sparse distribution to
+                maximize the possibility of a unique activation across all
+                the tasks. If `normal`, the attention will be initialized
+                with a normal distribution. If `dense`, the attention will
+                be initialized with a dense distribution.
+            task_id: The ID of the task. If `None`, the attention will be
+                initialized for all the tasks.
+
+        """
+        if strat == "sparse":
+            _num_tasks = len(self.attention)
+
+            def _min_func(x):
+                return 1 - x * (1 - x) ** (_num_tasks - 1)
+
+            _prob = scipy.optimize.minimize(
+                fun=_min_func,
+                x0=0.2 / _num_tasks,  # Empirically determined estimation
+            ).x[0]
+            assert isinstance(_prob, float) and 0 <= _prob <= 1
+            _mean, _var = scipy.stats.norm(0, 1).ppf(_prob), 1
+        elif strat == "normal":
+            _mean, _var = 0, 1
+        elif strat == "dense":
+            _mean, _var = 1, 0
+        else:
+            raise HATInitializationError(
+                f"Unknown HAT initialization strategy: {strat}"
+            )
+
+        if task_id is None:
+            for __attn in self.attention:
+                __attn.data.normal_(_mean, _var)
+        else:
+            self.attention[task_id].data.normal_(_mean, _var)
 
     def _register_grad_mod_hooks(
         self,

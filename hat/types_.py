@@ -7,7 +7,12 @@ from typing import Any, Callable, Optional, Union
 
 import torch
 
-from .constants import DEF_HAT_GRAD_COMP_CLAMP, DEF_HAT_MAX_TRN_MASK_SCALE
+from .constants import (
+    DEF_HAT_ATTN_CLAMP,
+    DEF_HAT_GRAD_COMP_CLAMP,
+    DEF_HAT_INIT_STRAT,
+    DEF_HAT_MAX_TRN_MASK_SCALE,
+)
 
 Mask = Union[torch.FloatTensor, torch.BoolTensor]
 
@@ -22,6 +27,8 @@ class HATConfig(Mapping):
         max_trn_mask_scale: The maximum scale of the trainable mask.
             Necessary for gradient compensation. Defaults to
             `hat.constants.DEF_HAT_MAX_TRN_MASK_SCALE`.
+        init_strat: The initialization strategy for the trainable mask.
+            Defaults to `hat.constants.DEF_HAT_INIT_STRAT`.
         grad_comp_clamp: The maximum value of the gradient during gradient
             compensation. Defaults to `hat.constants.DEF_HAT_GRAD_COMP_CLAMP`.
         gate: The gating function to apply to the scaled attention vector.
@@ -34,7 +41,10 @@ class HATConfig(Mapping):
         self,
         num_tasks: int,
         mask_dim: Optional[int] = None,
-        max_trn_mask_scale: Optional[float] = DEF_HAT_MAX_TRN_MASK_SCALE,
+        init_strat: str = DEF_HAT_INIT_STRAT,
+        max_trn_mask_scale: float = DEF_HAT_MAX_TRN_MASK_SCALE,
+        # TODO: make the clamps optional
+        attn_clamp: float = DEF_HAT_ATTN_CLAMP,
         grad_comp_clamp: float = DEF_HAT_GRAD_COMP_CLAMP,
         gate: Callable[[torch.Tensor], torch.Tensor] = torch.sigmoid,
         **kwargs: Any,  # For polymorphism reasons.
@@ -43,6 +53,8 @@ class HATConfig(Mapping):
         self.num_tasks = num_tasks
         self.mask_dim = mask_dim
         self.max_trn_mask_scale = max_trn_mask_scale
+        self.init_strat = init_strat
+        self.attn_clamp = attn_clamp
         self.grad_comp_clamp = grad_comp_clamp
         self.gate = gate
         if kwargs != {}:
