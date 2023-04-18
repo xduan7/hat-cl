@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import scipy
 import torch
@@ -45,15 +45,15 @@ class _HATMakerRegulator:
 
     def get_reg_term(
         self,
-        reg_strat: Literal["uniform"],
+        strat: str,
         **kwargs: Any,
     ) -> torch.Tensor:
-        if reg_strat == "uniform":
+        if strat == "uniform":
             return self.get_uniform_reg_term(**kwargs)
-        # elif reg_strat == "heuristic":
+        # elif strat == "heuristic":
         #     return self.get_heuristic_reg_term(*args, **kwargs)
         else:
-            raise ValueError(f"Unknown regularization strategy: {reg_strat}")
+            raise ValueError(f"Unknown regularization strategy: {strat}")
 
     def get_uniform_reg_term(
         self,
@@ -372,7 +372,7 @@ class HATMasker(
         if not dry_run:
             self._task_trained[task_id] = False
             self._cached_binary_mask.pop(task_id, None)
-            self._init_attention(task_id=task_id)
+            self._init_attention(task_id=task_id, strat=self._init_strat)
         _attention_forget_result = torch.zeros(
             (self.num_tasks, self.attention[task_id].numel()), dtype=torch.bool
         )
@@ -567,13 +567,13 @@ class HATMasker(
 
     def get_reg_term(
         self,
-        reg_strat: Literal["uniform"],
+        strat: str,
         **kwargs: Any,
     ) -> torch.Tensor:
         """Get the regularization term for the HAT masker.
 
         Args:
-            reg_strat: The regularization strategy. See
+            strat: The regularization strategy. See
                 `_HATRegulator.get_reg_term()` for details.
             **kwargs: Additional keyword arguments to be passed to the
                 regularization function.
@@ -583,13 +583,13 @@ class HATMasker(
 
         """
         return self.regulator.get_reg_term(
-            reg_strat=reg_strat,
+            strat=strat,
             **kwargs,
         )
 
     def _init_attention(
         self,
-        strat: str = "normal",
+        strat: str,
         task_id: Optional[int] = None,
     ):
         """Initialize the attention.
