@@ -9,6 +9,9 @@ DEF_HAT_INIT_STRAT: Final[str] = "normal"
 # Default gradient compensation clamp value for attention masks.
 DEF_HAT_GRAD_COMP_CLAMP: Final[float] = 50.0
 
+# Default gradient compensation factor for attention masks.
+DEF_HAT_GRAD_COMP_FACTOR: Final[float] = 100.0
+
 # Default clipping value for the attention values.
 DEF_HAT_ATTN_CLAMP: Final[float] = 6.0
 

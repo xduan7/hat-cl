@@ -503,15 +503,18 @@ class HATMaskedModuleABC(
 
         """
         self.remove_grad_mod_hooks()
-        _w_grad_cond_hook = functools.partial(
-            self._condition_weight_grad,
-            prev_locked_mask=prev_locked_mask,
-            curr_locked_mask=curr_locked_mask,
-        )
-        _w_grad_cond_hook.__torch_unserializable__ = True  # type: ignore
-        _w_grad_cond_hook_handle = self.weight.register_hook(_w_grad_cond_hook)
-        self._grad_mod_hook_handles.append(_w_grad_cond_hook_handle)
-        if self.bias is not None:
+        if self.weight.requires_grad:
+            _w_grad_cond_hook = functools.partial(
+                self._condition_weight_grad,
+                prev_locked_mask=prev_locked_mask,
+                curr_locked_mask=curr_locked_mask,
+            )
+            _w_grad_cond_hook.__torch_unserializable__ = True  # type: ignore
+            _w_grad_cond_hook_handle = self.weight.register_hook(
+                _w_grad_cond_hook
+            )
+            self._grad_mod_hook_handles.append(_w_grad_cond_hook_handle)
+        if self.bias is not None and self.bias.requires_grad:
             _b_grad_cond_hook = functools.partial(
                 self._condition_bias_grad,
                 curr_locked_mask=curr_locked_mask,

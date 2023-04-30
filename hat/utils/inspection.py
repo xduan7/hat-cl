@@ -26,7 +26,12 @@ def _get_hat_masker_util(
         if __task_id not in hat_masker.trained_task_ids:
             raise ValueError(f"Task ID {__task_id} is not trained.")
         _hat_masker_util[__task_id] = (
-            hat_masker.get_binary_mask(__task_id).sum().item(),
+            hat_masker.get_binary_mask(
+                task_id=__task_id,
+                from_cache=False,
+            )
+            .sum()
+            .item(),
             hat_masker.num_features,
         )
     return _hat_masker_util
@@ -68,4 +73,6 @@ def get_hat_util(
         data=_hat_util,
         orient="index",
     )
+    # TODO: add column and index names
+    # TODO: add summary
     return _hat_util_df

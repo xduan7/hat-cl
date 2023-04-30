@@ -154,12 +154,14 @@ class HATMasker(
                 for _ in range(_num_tasks)
             ]
         )
-        self._init_attention(strat=hat_config.init_strat)
+        self._init_strat = hat_config.init_strat
+        self._init_attention(strat=self._init_strat)
         self.regulator = _HATMakerRegulator(masker=self)
 
         self._max_trn_mask_scale = hat_config.max_trn_mask_scale
         self._attn_clamp = hat_config.attn_clamp
         self._grad_comp_clamp = hat_config.grad_comp_clamp
+        self._grad_comp_factor = hat_config.grad_comp_factor
         self._gate = hat_config.gate
 
         self._depth: Optional[int] = None
@@ -289,6 +291,7 @@ class HATMasker(
     def get_binary_mask(
         self,
         task_id: int,
+        from_cache: bool = True,
     ) -> Mask:
         """Get the binary mask for the given task ID.
 
@@ -298,11 +301,13 @@ class HATMasker(
 
         Args:
             task_id: The ID of the task.
+            from_cache: Whether to use the cached mask. If set to `False`,
+                the mask will be generated from scratch.
 
         Returns:
             The binary mask tensor.
         """
-        if task_id not in self._cached_binary_mask:
+        if task_id not in self._cached_binary_mask or not from_cache:
             self._cached_binary_mask[task_id] = self.attention[task_id] > 0
         return self._cached_binary_mask[task_id]
 
@@ -651,29 +656,34 @@ class HATMasker(
 
         """
         self.remove_grad_mod_hooks()
-        _grad_mod_hook = functools.partial(
-            self._compensate_attention_grad,
-            attention=self.attention[task_id],
-            mask_scale=mask_scale,
-            max_trn_mask_scale=self._max_trn_mask_scale,
-            grad_comp_clamp=self._grad_comp_clamp,
-        )
-        _grad_mod_hook.__torch_unserializable__ = True  # type: ignore
-        _grad_comp_hook_handle = self.attention[task_id].register_hook(
-            _grad_mod_hook
-        )
-        self._grad_mod_hook_handles.append(_grad_comp_hook_handle)
+        if self.attention[task_id].requires_grad:
+            _grad_mod_hook = functools.partial(
+                self._compensate_attention_grad,
+                attention=self.attention[task_id],
+                mask_scale=mask_scale,
+                grad_comp_clamp=self._grad_comp_clamp,
+                grad_comp_factor=self._grad_comp_factor,
+            )
+            _grad_mod_hook.__torch_unserializable__ = True  # type: ignore
+            _grad_comp_hook_handle = self.attention[task_id].register_hook(
+                _grad_mod_hook
+            )
+            self._grad_mod_hook_handles.append(_grad_comp_hook_handle)
 
     @staticmethod
     def _compensate_attention_grad(
         attention_grad: torch.Tensor,
         attention: torch.Tensor,
-        mask_scale: Optional[float],
-        max_trn_mask_scale: float,
+        mask_scale: float,
         grad_comp_clamp: float,
+        grad_comp_factor: float,
     ) -> torch.Tensor:
         """Compensate the gradient of hard attention to make attention masks
         easier to train.
+
+        Instead of using the maximum value of the training mask scale as
+        the compensation factor, we decide to use a separate value for the
+        sake of flexibility.
 
         References:
             [1] https://arxiv.org/abs/1801.01423 (Chapter 2.5)
@@ -684,7 +694,7 @@ class HATMasker(
                 mask_scale * attention, -grad_comp_clamp, grad_comp_clamp
             )
         )
-        _num = (_num + 1) * max_trn_mask_scale
+        _num = (_num + 1) * grad_comp_factor
         _den = torch.cosh(attention)
         _den = (_den + 1) * mask_scale
         attention_grad *= _num / _den

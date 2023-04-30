@@ -110,31 +110,29 @@ def _get_exponential_hat_mask_scale(
 def _get_cosine_hat_mask_scale(
     progress: float,
     max_trn_mask_scale: float,
-    min_trn_mask_scale: Optional[float] = None,
+    min_trn_mask_scale: float = 1,
 ) -> float:
     """Get the scale of the HAT attention mask using a cosine scaling.
 
-    The scale is scaled from `max_trn_mask_scale` to `min_trn_mask_scale`
-    and back to `max_trn_mask_scale` using a cosine function as the training
-    progresses. This scaling strategy trains the model weights at the
-    beginning to make sure that the weights are in a good direction, and
-    then trains the masks in the middle, and finally fine-tunes the model
-    weights at the end with binary masks.
+    The scale is scaled from `max_trn_mask_scale` to `0` and back to
+    `max_trn_mask_scale` using a cosine function as the training
+    progresses. If the cosine function goes below `min_trn_mask_scale`,
+    `min_trn_mask_scale` will be used instead. This is the scaling strategy
+    trains the model weights at the beginning to make sure that the weights
+    are in a good direction, and then trains the masks in the middle,
+    and finally fine-tunes the model weights at the end with binary masks.
 
     Args:
         progress: The training progress. Must be in the range [0, 1].
         max_trn_mask_scale: The maximum scale of the HAT attention mask.
-        min_trn_mask_scale: The optional minimum scale of the HAT attention
-            mask. If not provided, it will be set to 1 / `max_trn_mask_scale`.
+        min_trn_mask_scale: The minimum scale of the HAT attention mask.
+            If the cosine function goes below this value, this value will be
+            used instead. Default to 1.
 
     Returns:
         The scale of the HAT attention mask.
 
     """
-    if min_trn_mask_scale is None:
-        min_trn_mask_scale = 1 / max_trn_mask_scale
-    half_scale = (max_trn_mask_scale - min_trn_mask_scale) / 2
-    return (
-        half_scale * math.cos(progress * 2 * math.pi)
-        + (max_trn_mask_scale + min_trn_mask_scale) / 2
-    )
+    half_scale = max_trn_mask_scale / 2
+    _scale = half_scale * math.cos(progress * 2 * math.pi) + half_scale
+    return _scale if _scale >= min_trn_mask_scale else min_trn_mask_scale

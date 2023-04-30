@@ -10,6 +10,7 @@ import torch
 from .constants import (
     DEF_HAT_ATTN_CLAMP,
     DEF_HAT_GRAD_COMP_CLAMP,
+    DEF_HAT_GRAD_COMP_FACTOR,
     DEF_HAT_INIT_STRAT,
     DEF_HAT_MAX_TRN_MASK_SCALE,
 )
@@ -31,6 +32,9 @@ class HATConfig(Mapping):
             Defaults to `hat.constants.DEF_HAT_INIT_STRAT`.
         grad_comp_clamp: The maximum value of the gradient during gradient
             compensation. Defaults to `hat.constants.DEF_HAT_GRAD_COMP_CLAMP`.
+        grad_comp_factor: The factor to multiply the gradient with during
+            gradient compensation. Defaults to
+            `hat.constants.DEF_HAT_GRAD_COMP_FACTOR`.
         gate: The gating function to apply to the scaled attention vector.
             Defaults to `torch.sigmoid`.
         **kwargs: For polymorphism reasons. Should be empty.
@@ -46,6 +50,7 @@ class HATConfig(Mapping):
         # TODO: make the clamps optional
         attn_clamp: float = DEF_HAT_ATTN_CLAMP,
         grad_comp_clamp: float = DEF_HAT_GRAD_COMP_CLAMP,
+        grad_comp_factor: float = DEF_HAT_GRAD_COMP_FACTOR,
         gate: Callable[[torch.Tensor], torch.Tensor] = torch.sigmoid,
         **kwargs: Any,  # For polymorphism reasons.
     ):
@@ -56,6 +61,7 @@ class HATConfig(Mapping):
         self.init_strat = init_strat
         self.attn_clamp = attn_clamp
         self.grad_comp_clamp = grad_comp_clamp
+        self.grad_comp_factor = grad_comp_factor
         self.gate = gate
         if kwargs != {}:
             warnings.warn(f"Unrecognized kwargs: {kwargs}.")
