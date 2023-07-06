@@ -6,6 +6,7 @@ from __future__ import annotations
 import functools
 import warnings
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import torch
@@ -237,6 +238,74 @@ class TaskIndexedModuleListABC(
             prev_maskers=pld.prev_maskers,
             mask_applied=_mask_applied,
         )
+
+    # noinspection PyUnusedLocal
+    def _get_forget_result(
+        self,
+        task_id: int,
+        module_name: Optional[str] = None,
+        locked_task_ids: Optional[list[int]] = None,
+    ) -> ForgetResult:
+        """Get the forget result for the given task id and module name.
+
+        Args:
+            task_id: The ID of the task to be forgotten. Cannot be `None`
+                even if the module accepts `None` as a task id.
+            module_name: The name of the module. If `None`, the module name
+                will be inferred from the module class name.
+            locked_task_ids: The list of task ids that are locked and
+                cannot be forgotten. This is ignored here, as forgetting
+                of a task does not affect the other tasks.
+
+        Returns:
+            The forgetting result. See `hat.types_.ForgetResult` for more
+            details.
+
+        """
+        _task_indexed_module = self[task_id]
+        _forget_result: ForgetResult = {}  # type: ignore
+        _param_names = list(_task_indexed_module._parameters.keys())
+        for __param_name in _param_names:
+            __param = _task_indexed_module._parameters[__param_name]
+            __forget_param = torch.zeros(
+                (len(self), __param.numel()), dtype=torch.bool
+            )
+            __forget_param[task_id, :] = True
+            _forget_result[f"{module_name}.{__param_name}"] = __forget_param
+        return _forget_result
+
+    def to_base_module(
+        self,
+        task_id: Optional[int] = None,
+        **kwargs: Any,
+    ) -> nn.Module:
+        """Convert the task-indexed module (list) to a normal PyTorch
+        module by deep copying the module of the given task.
+
+        Args:
+            task_id: The ID of the task to be converted. If `None`, the
+                module that corresponds to the non-task-specific case will
+                be converted.
+            **kwargs: For compatibility with other modules' `to_base_module`
+                methods. Will be ignored here.
+
+        Returns:
+            The converted PyTorch batch normalization layer.
+
+        """
+        return deepcopy(self[task_id])
+
+    def load_from_base_module(self, base_module: nn.Module):
+        """Load the parameters of the given module to all the modules of
+        the task-indexed module (list) by calling `load_state_dict`.
+
+        Args:
+            base_module: The module from which the parameters will be
+                loaded.
+
+        """
+        for __task_id in range(self.num_tasks):
+            self[__task_id].load_state_dict(base_module.state_dict())
 
     def __getitem__(self, key: Union[Optional[int], HATPayload]) -> nn.Module:
         from hat.payload import HATPayload

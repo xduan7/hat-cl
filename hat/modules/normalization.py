@@ -1,34 +1,33 @@
 from __future__ import annotations
 
-from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
+import torch
 from torch import classproperty
 from torch import nn as nn
 
-# noinspection PyProtectedMember
-from torch.nn.modules.batchnorm import _BatchNorm
-
-from ._base import ForgetResult, TaskIndexedModuleListABC
+from ._base import ForgetResult, HATPayload, TaskIndexedModuleListABC
 from .utils import register_mapping
 
-if TYPE_CHECKING:
-    from hat.payload import HATPayload
-else:
-    HATPayload = Any
 
+@register_mapping
+class TaskIndexedLayerNorm(TaskIndexedModuleListABC):
+    """Task-indexed layer normalization layer.
 
-class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
-    """Abstract class for task-indexed batch normalization layers.
-
-    It implements all the methods for the task-indexed batch normalization
-    except for the `base_class` property, which differs for different
-    batch normalization layers.
+    Task-indexed layer normalization layer s a wrapper class of the
+    :class:`torch.nn.LayerNorm` layer. It has a list of normalization
+    layers, each of which corresponds to a task, to prevent interference
+    between tasks.
 
     """
 
+    @classproperty
+    def base_class(self) -> type[torch.nn.Module]:
+        """Base class of task-indexed layer normalization."""
+        return torch.nn.LayerNorm  # type: ignore
+
     def forward(self, pld: HATPayload) -> HATPayload:
-        """Forward the payload by applying batch normalization of the given
+        """Forward the payload by applying layer normalization of the given
         task to the unmasked data.
 
         Args:
@@ -48,7 +47,7 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
         locked_task_ids: Optional[list[int]] = None,
     ) -> ForgetResult:
         """Forget the given tasks by resetting the parameters of the
-        batch normalization module of the given task.
+        layer normalization module of the given task.
 
         Args:
             task_id: The ID of the task to be forgotten. Cannot be `None`
@@ -76,17 +75,17 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
 
     @classmethod
     def from_base_module(
-        cls: type[_TaskIndexedBatchNorm],
-        base_module: _BatchNorm,
+        cls,
+        base_module: nn.LayerNorm,
         num_tasks: Optional[int] = None,
         **kwargs: Any,
-    ) -> _TaskIndexedBatchNorm:
-        """Create a task-indexed batch normalization layer from a PyTorch
-        batch normalization layer by copying the parameters of the given
-        module to the batch normalization layers of all the tasks.
+    ) -> TaskIndexedLayerNorm:
+        """Create a task-indexed layer normalization layer from a PyTorch
+        layer normalization layer by copying the parameters of the given
+        module to the layer normalization layers of all the tasks.
 
         Args:
-            base_module: The PyTorch batch normalization layer to be
+            base_module: The PyTorch layer normalization layer to be
                 converted.
             num_tasks: The number of tasks. Defaults to `None` for
                 compatibility  with other modules' `from_base_module`
@@ -95,63 +94,29 @@ class _TaskIndexedBatchNorm(TaskIndexedModuleListABC, ABC):
                 methods. Will be ignored here.
 
         Returns:
-            The created task-indexed batch normalization layer.
+            The created task-indexed layer normalization layer.
 
         """
         if num_tasks is None:
             raise ValueError(
                 "The number of tasks must be explicitly specified when "
-                "creating a task-dependent batch normalization layer "
+                "creating a task-dependent layer normalization layer "
                 "from a base module."
             )
-        if base_module.affine:
+        if base_module.elementwise_affine:
             _device = base_module.weight.device
             _dtype = base_module.weight.dtype
-        elif base_module.track_running_stats:
-            _device = base_module.running_mean.device
-            _dtype = base_module.running_mean.dtype
         else:
             _device = None
             _dtype = None
-        _ti_bn = cls(
+
+        _ti_ln = cls(
             num_tasks=num_tasks,
-            num_features=base_module.num_features,
+            normalized_shape=base_module.normalized_shape,
             eps=base_module.eps,
-            momentum=base_module.momentum,
-            affine=base_module.affine,
-            track_running_stats=base_module.track_running_stats,
+            elementwise_affine=base_module.elementwise_affine,
             device=_device,
             dtype=_dtype,
         )
-        _ti_bn.load_from_base_module(base_module)
-        return _ti_bn
-
-
-@register_mapping
-class TaskIndexedBatchNorm1d(_TaskIndexedBatchNorm):
-    """Task-indexed 1D batch normalization layer."""
-
-    @classproperty
-    def base_class(self) -> type[nn.Module]:
-        """Base class of task-indexed batch normalization 1D."""
-        return nn.BatchNorm1d  # type: ignore
-
-
-@register_mapping
-class TaskIndexedBatchNorm2d(_TaskIndexedBatchNorm):
-    """Task-indexed 2D batch normalization layer."""
-
-    @classproperty
-    def base_class(self) -> type[nn.Module]:
-        """Base class of task-indexed batch normalization 2D."""
-        return nn.BatchNorm2d  # type: ignore
-
-
-@register_mapping
-class TaskIndexedBatchNorm3d(_TaskIndexedBatchNorm):
-    """Task-indexed 3D batch normalization layer."""
-
-    @classproperty
-    def base_class(self) -> type[nn.Module]:
-        """Base class of task-indexed batch normalization 3D."""
-        return nn.BatchNorm3d  # type: ignore
+        _ti_ln.load_from_base_module(base_module)
+        return _ti_ln
