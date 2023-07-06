@@ -292,6 +292,7 @@ class HATMasker(
         self,
         task_id: int,
         from_cache: bool = True,
+        save_to_cache: bool = True,
     ) -> Mask:
         """Get the binary mask for the given task ID.
 
@@ -302,13 +303,18 @@ class HATMasker(
         Args:
             task_id: The ID of the task.
             from_cache: Whether to use the cached mask. If set to `False`,
-                the mask will be generated from scratch.
+                the mask will be generated from scratch. Defaults to `True`.
+            save_to_cache: Whether to save the generated mask to the cache.
+                Defaults to `True`.
 
         Returns:
             The binary mask tensor.
         """
         if task_id not in self._cached_binary_mask or not from_cache:
-            self._cached_binary_mask[task_id] = self.attention[task_id] > 0
+            _binary_mask = self.attention[task_id] > 0
+            if save_to_cache:
+                self._cached_binary_mask[task_id] = _binary_mask
+            return _binary_mask
         return self._cached_binary_mask[task_id]
 
     def get_locked_mask(

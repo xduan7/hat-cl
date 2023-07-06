@@ -29,6 +29,7 @@ def _get_hat_masker_util(
             hat_masker.get_binary_mask(
                 task_id=__task_id,
                 from_cache=False,
+                save_to_cache=False,
             )
             .sum()
             .item(),
