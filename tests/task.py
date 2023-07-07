@@ -34,6 +34,32 @@ def _compare_modules(
     return True
 
 
+def check_forward(
+    test_case: unittest.TestCase,
+    input_shape: Iterable[int],
+    module: nn.Module,
+    is_task_dependent: bool,
+    device: torch.device = DEVICE,
+):
+    """Check if the module can forward the input data."""
+    _module = module.to(device)
+    _input_data = torch.rand(BATCH_SIZE, *input_shape).to(device)
+    if is_task_dependent:
+        _input = HATPayload(
+            data=_input_data,
+            task_id=0,
+            mask_scale=TRN_MASK_SCALE,
+        )
+        _output = _input.forward_by(_module).data
+    else:
+        _input = _input_data
+        _output = _module(_input)
+    test_case.assertIsNotNone(
+        _output,
+        f"The module cannot forward the input data. \nModule: {_module}",
+    )
+
+
 def check_remembering(
     test_case: unittest.TestCase,
     input_shape: Iterable[int],

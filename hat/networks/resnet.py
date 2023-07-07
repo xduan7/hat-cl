@@ -149,7 +149,7 @@ class ResNet_(ResNet):
     def __init__(
         self,
         layers,
-        block=HATBasicBlock,
+        block=BasicBlock,
         num_classes=1000,
         in_chans=3,
         output_stride=32,
@@ -336,10 +336,27 @@ def _create_resnet_hat(variant, pretrained=False, **kwargs):
 
 
 @register_model
+def resnet18s(pretrained=False, **kwargs):
+    """Constructs a ResNet-18-S model."""
+    model_kwargs = dict(
+        layers=[2, 2, 2, 2],
+        block=BasicBlock,
+        reduced_conv1_kernel=True,
+        **kwargs,
+    )
+    return _create_resnet(
+        variant="hat_resnet18s",
+        pretrained=pretrained,
+        **model_kwargs,
+    )
+
+
+@register_model
 def hat_resnet18(pretrained=False, **kwargs):
     """Constructs a HAT-ResNet-18 model."""
     model_kwargs = dict(
         layers=[2, 2, 2, 2],
+        block=HATBasicBlock,
         **kwargs,
     )
     return _create_resnet_hat(
@@ -354,11 +371,59 @@ def hat_resnet18s(pretrained=False, **kwargs):
     """Constructs a HAT-ResNet-18-S model."""
     model_kwargs = dict(
         layers=[2, 2, 2, 2],
+        block=HATBasicBlock,
         reduced_conv1_kernel=True,
         **kwargs,
     )
     return _create_resnet_hat(
         variant="hat_resnet18s",
+        pretrained=pretrained,
+        **model_kwargs,
+    )
+
+
+@register_model
+def resnet34s(pretrained=False, **kwargs):
+    """Constructs a ResNet-34-S model."""
+    model_kwargs = dict(
+        layers=[3, 4, 6, 3],
+        block=BasicBlock,
+        reduced_conv1_kernel=True,
+        **kwargs,
+    )
+    return _create_resnet(
+        variant="hat_resnet34s",
+        pretrained=pretrained,
+        **model_kwargs,
+    )
+
+
+@register_model
+def hat_resnet34(pretrained=False, **kwargs):
+    """Constructs a HAT-ResNet-34 model."""
+    model_kwargs = dict(
+        layers=[3, 4, 6, 3],
+        block=HATBasicBlock,
+        **kwargs,
+    )
+    return _create_resnet_hat(
+        variant="hat_resnet34",
+        pretrained=pretrained,
+        **model_kwargs,
+    )
+
+
+@register_model
+def hat_resnet34s(pretrained=False, **kwargs):
+    """Constructs a HAT-ResNet-34-S model."""
+    model_kwargs = dict(
+        layers=[3, 4, 6, 3],
+        block=HATBasicBlock,
+        reduced_conv1_kernel=True,
+        **kwargs,
+    )
+    return _create_resnet_hat(
+        variant="hat_resnet34s",
         pretrained=pretrained,
         **model_kwargs,
     )
