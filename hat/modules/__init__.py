@@ -7,6 +7,7 @@ from .batchnorm import (
 from .conv import HATConv1d, HATConv2d, HATConv3d
 from .linear import HATLinear
 from .maskers import AttentionMasker, ConstantMasker, HATMasker
+from .normalization import TaskIndexedLayerNorm
 
 __all__ = [
     "TaskIndexedBatchNorm1d",
@@ -19,4 +20,5 @@ __all__ = [
     "AttentionMasker",
     "HATMasker",
     "HATLinear",
+    "TaskIndexedLayerNorm",
 ]

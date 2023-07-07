@@ -7,13 +7,13 @@ from hat.modules import HATLinear, TaskIndexedBatchNorm1d
 from hat.types_ import HATConfig
 from tests.constants import DEBUG, DROPOUT_RATE, NUM_TASKS
 
-from . import _TestHATModule
+from . import _TestHATModuleABC
 
 INPUT_DIM = 8 if DEBUG else 128
 OUTPUT_DIM = 6 if DEBUG else 32
 
 
-class TestHATLinear(unittest.TestCase, _TestHATModule):
+class TestHATLinear(unittest.TestCase, _TestHATModuleABC):
     @property
     def input_shape(self) -> Iterable[int]:
         # noinspection PyRedundantParentheses

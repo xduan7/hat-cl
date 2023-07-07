@@ -13,9 +13,9 @@ from hat.modules import (
     TaskIndexedBatchNorm3d,
 )
 from hat.types_ import HATConfig
-from tests.constants import DEBUG, DROPOUT_RATE, NUM_TASKS
+from tests.constants import BATCH_SIZE, DEBUG, DROPOUT_RATE, NUM_TASKS
 
-from . import _TestHATModule
+from . import _TestHATModuleABC
 
 CONV1D_INPUT_SHAPE = (2,) if DEBUG else (64,)
 CONV2D_INPUT_SHAPE = (2, 2) if DEBUG else (8, 8)
@@ -55,7 +55,7 @@ KERNEL_DIM_TO_TI_BN_CLS: dict[int, type[nn.Module]] = {
 }
 
 
-class _TestHATConvnd(_TestHATModule, ABC):
+class _TestHATConvndABC(_TestHATModuleABC, ABC):
     @property
     @abstractmethod
     def kernel_dim(self) -> int:
@@ -169,7 +169,7 @@ class _TestHATConvnd(_TestHATModule, ABC):
         )
 
 
-class TestHATConv1d(unittest.TestCase, _TestHATConvnd):
+class TestHATConv1d(unittest.TestCase, _TestHATConvndABC):
     @property
     def kernel_dim(self) -> int:
         return 1
@@ -180,7 +180,7 @@ class TestHATConv1d(unittest.TestCase, _TestHATConvnd):
         return (INPUT_CHANNELS, *CONV1D_INPUT_SHAPE)
 
 
-class TestHATConv2d(unittest.TestCase, _TestHATConvnd):
+class TestHATConv2d(unittest.TestCase, _TestHATConvndABC):
     @property
     def kernel_dim(self) -> int:
         return 2
@@ -191,7 +191,7 @@ class TestHATConv2d(unittest.TestCase, _TestHATConvnd):
         return (INPUT_CHANNELS, *CONV2D_INPUT_SHAPE)
 
 
-class TestHATConv3d(unittest.TestCase, _TestHATConvnd):
+class TestHATConv3d(unittest.TestCase, _TestHATConvndABC):
     @property
     def kernel_dim(self) -> int:
         return 3

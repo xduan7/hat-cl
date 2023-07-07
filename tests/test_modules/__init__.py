@@ -20,7 +20,7 @@ from tests.task import (
 from tests.utils import set_up
 
 
-class _TestHATModule(ABC):
+class _TestModuleABC(ABC):
     # noinspection PyPep8Naming,PyMethodMayBeStatic
     def setUp(self):
         set_up()
@@ -34,6 +34,16 @@ class _TestHATModule(ABC):
     def get_single_layer_module(self) -> nn.Module:
         raise NotImplementedError
 
+    @abstractmethod
+    def test_single_layer_to_base_conversion(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def test_single_layer_from_base_conversion(self):
+        raise NotImplementedError
+
+
+class _TestHATModuleABC(_TestModuleABC):
     @abstractmethod
     def get_single_layer_hat_module(self) -> nn.Module:
         raise NotImplementedError
@@ -176,4 +186,24 @@ class _TestHATModule(ABC):
             test_case=self,
             input_shape=self.input_shape,
             module=self.get_multi_layer_hat_module(),
+        )
+
+
+class _TestTIModule(_TestModuleABC):
+    @abstractmethod
+    def get_single_layer_ti_module(self) -> nn.Module:
+        raise NotImplementedError
+
+    def test_single_layer_to_base_conversion(self):
+        check_to_base_conversion(
+            test_case=self,
+            input_shape=self.input_shape,
+            module=self.get_single_layer_ti_module(),
+        )
+
+    def test_single_layer_from_base_conversion(self):
+        check_from_base_conversion(
+            test_case=self,
+            input_shape=self.input_shape,
+            module=self.get_single_layer_module(),
         )

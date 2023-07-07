@@ -259,6 +259,8 @@ def check_fully_task_dependent(
     module: nn.Module,
 ):
     """Check if a module is fully task-dependent."""
+    if isinstance(module, TaskDependentModuleABC):
+        return True
     for __n, __m in module.named_children():
         if isinstance(__m, TaskDependentModuleABC):
             return True
@@ -274,6 +276,8 @@ def check_fully_torch(
     module: nn.Module,
 ):
     """Check if a module is fully torch."""
+    if isinstance(module, TaskDependentModuleABC):
+        test_case.fail(f"Module is task-dependent.")
     for __n, __m in module.named_children():
         if isinstance(__m, TaskDependentModuleABC):
             test_case.fail(f"Module {__n} is task-dependent.")
