@@ -2,7 +2,7 @@ import unittest
 from typing import Iterable
 
 # noinspection PyUnresolvedReferences
-import hat.networks
+import hat.timm_models
 from hat.types_ import HATConfig
 from tests.constants import NUM_TASKS
 

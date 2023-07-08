@@ -4,7 +4,7 @@ Examples:
     To create any model implemented in this module:
     ```python
     import timm
-    import hat.models
+    import hat.timm_models
     from hat import HATConfig
 
     model_name = "hat_resnet18"
@@ -13,3 +13,4 @@ Examples:
     ```
 """
 from .resnet import *  # noqa: F401, F403
+from .vision_transformer import *  # noqa: F401, F403

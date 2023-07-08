@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
@@ -6,8 +6,7 @@ from timm.models import register_model
 from timm.models.helpers import build_model_with_cfg, checkpoint_seq
 
 # noinspection PyProtectedMember
-from timm.models.resnest import _cfg
-from timm.models.resnet import BasicBlock, ResNet
+from timm.models.resnet import BasicBlock, ResNet, _cfg
 
 # noinspection PyProtectedMember
 from hat.modules._base import HATPayloadCarrierMixin
@@ -16,12 +15,19 @@ from hat.types_ import HATConfig
 
 from .utils import convert_children_to_task_dependent_modules
 
-__all__ = ["HATResNet"]
-
-
 default_cfgs = {
+    "resnet18s": _cfg(
+        input_size=(3, 32, 32),
+    ),
     "hat_resnet18": _cfg(),
     "hat_resnet18s": _cfg(
+        input_size=(3, 32, 32),
+    ),
+    "resnet34s": _cfg(
+        input_size=(3, 32, 32),
+    ),
+    "hat_resnet34": _cfg(),
+    "hat_resnet34s": _cfg(
         input_size=(3, 32, 32),
     ),
 }
@@ -148,29 +154,29 @@ class ResNet_(ResNet):
 
     def __init__(
         self,
-        layers,
-        block=BasicBlock,
-        num_classes=1000,
-        in_chans=3,
-        output_stride=32,
-        global_pool="avg",
-        cardinality=1,
-        base_width=64,
-        stem_width=64,
-        stem_type="",
-        replace_stem_pool=False,
-        block_reduce_first=1,
-        down_kernel_size=1,
-        avg_down=False,
-        act_layer=nn.ReLU,
-        norm_layer=nn.BatchNorm2d,
-        aa_layer=None,
-        drop_rate=0.0,
-        drop_path_rate=0.0,
-        drop_block_rate=0.0,
-        zero_init_last=True,
-        block_args=None,
-        reduced_conv1_kernel=False,
+        layers: Sequence[int],
+        block: nn.Module = BasicBlock,
+        num_classes: int = 1000,
+        in_chans: int = 3,
+        output_stride: int = 32,
+        global_pool: str = "avg",
+        cardinality: int = 1,
+        base_width: int = 64,
+        stem_width: int = 64,
+        stem_type: str = "",
+        replace_stem_pool: bool = False,
+        block_reduce_first: int = 1,
+        down_kernel_size: int = 1,
+        avg_down: bool = False,
+        act_layer: nn.Module = nn.ReLU,
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        aa_layer: Optional[nn.Module] = None,
+        drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        drop_block_rate: float = 0.0,
+        zero_init_last: bool = True,
+        block_args: Optional[Dict[str, Any]] = None,
+        reduced_conv1_kernel: bool = False,
     ):
         super().__init__(
             block=block,
@@ -227,30 +233,30 @@ class HATResNet(ResNet_, HATPayloadCarrierMixin):
 
     def __init__(
         self,
-        layers,
+        layers: Sequence[int],
         hat_config: HATConfig,
-        block=HATBasicBlock,
-        num_classes=1000,
-        in_chans=3,
-        output_stride=32,
-        global_pool="avg",
-        cardinality=1,
-        base_width=64,
-        stem_width=64,
-        stem_type="",
-        replace_stem_pool=False,
-        block_reduce_first=1,
-        down_kernel_size=1,
-        avg_down=False,
-        act_layer=nn.ReLU,
-        norm_layer=nn.BatchNorm2d,
-        aa_layer=None,
-        drop_rate=0.0,
-        drop_path_rate=0.0,
-        drop_block_rate=0.0,
-        zero_init_last=True,
-        block_args=None,
-        reduced_conv1_kernel=False,
+        block: HATPayloadCarrierMixin = HATBasicBlock,
+        num_classes: int = 1000,
+        in_chans: int = 3,
+        output_stride: int = 32,
+        global_pool: str = "avg",
+        cardinality: int = 1,
+        base_width: int = 64,
+        stem_width: int = 64,
+        stem_type: str = "",
+        replace_stem_pool: bool = False,
+        block_reduce_first: int = 1,
+        down_kernel_size: int = 1,
+        avg_down: bool = False,
+        act_layer: nn.Module = nn.ReLU,
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        aa_layer: Optional[nn.Module] = None,
+        drop_rate: float = 0.0,
+        drop_path_rate: float = 0.0,
+        drop_block_rate: float = 0.0,
+        zero_init_last: bool = True,
+        block_args: Optional[Dict[str, Any]] = None,
+        reduced_conv1_kernel: bool = False,
     ):
         # Must prepare the `block_args` before calling the super constructor
         # so that the `block` can be correctly initialized.
@@ -281,7 +287,8 @@ class HATResNet(ResNet_, HATPayloadCarrierMixin):
             block_args=block_args,
             reduced_conv1_kernel=reduced_conv1_kernel,
         )
-        # Replace the all layers with their task-dependent versions.
+        # Replace the all layers with their task-dependent versions, including
+        # the final fc layer.
         convert_children_to_task_dependent_modules(self, **hat_config)
         # Dropout layer before the final fc layer.
         self.drop_fc = (
