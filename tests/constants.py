@@ -3,6 +3,7 @@ import functools
 import torch
 
 from hat.constants import DEF_HAT_MAX_TRN_MASK_SCALE
+from hat.types_ import HATConfig
 
 DEBUG = False
 RANDOM_SEED = 0
@@ -18,7 +19,8 @@ BATCH_SIZE = 2
 
 NUM_TASKS = 2 if DEBUG else 10
 MAX_TRN_MASK_SCALE = DEF_HAT_MAX_TRN_MASK_SCALE
-TRN_MASK_SCALE = 1.0
+TRN_MASK_SCALE = 3.0
+HAT_CONFIG = HATConfig(num_tasks=NUM_TASKS)
 
 DROPOUT_RATE = 0.2
 

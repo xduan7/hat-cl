@@ -15,11 +15,6 @@ from tests.task import (
 )
 from tests.utils import set_up
 
-# The shape of the input are the minimum size that can produces features of
-# size (B, C, 2, 2) for different models, in order to save time.
-RESNET_INPUT_SHAPE = (3, 4, 4) if DEBUG else (3, 33, 33)
-RESNET_S_INPUT_SHAPE = (3, 4, 4) if DEBUG else (3, 17, 17)
-
 
 class _TestNetworkABC(ABC):
     # noinspection PyPep8Naming,PyMethodMayBeStatic

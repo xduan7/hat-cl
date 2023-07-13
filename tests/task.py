@@ -6,6 +6,7 @@ from typing import Iterable
 import torch
 import torch.nn as nn
 
+from hat._base import TaskDependentMixin
 from hat.exceptions import NoParameterToForgetWarning
 
 # noinspection PyProtectedMember
@@ -94,6 +95,13 @@ def check_remembering(
                 )
                 __data = __pld.forward_by(_module).data
                 __data_ref = __pld.forward_by(__module_ref).data
+                print(
+                    f"Making sure that the module remembers the output of previous tasks after training on the current one."
+                )
+                print(__data)
+                print(__data_ref)
+                print(__data - __data_ref)
+
                 test_case.assertTrue(
                     torch.allclose(__data, __data_ref),
                     f"The output of previous task {__prev_task_id} "
@@ -285,10 +293,16 @@ def check_fully_task_dependent(
     module: nn.Module,
 ):
     """Check if a module is fully task-dependent."""
-    if isinstance(module, TaskDependentModuleABC):
+
+    def _is_task_dependent(module: nn.Module):
+        return isinstance(module, TaskDependentModuleABC) or isinstance(
+            module, TaskDependentMixin
+        )
+
+    if _is_task_dependent(module):
         return True
     for __n, __m in module.named_children():
-        if isinstance(__m, TaskDependentModuleABC):
+        if _is_task_dependent(__m):
             return True
         else:
             test_case.assertTrue(

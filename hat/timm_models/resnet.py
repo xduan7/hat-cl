@@ -47,21 +47,21 @@ class HATBasicBlock(BasicBlock, HATPayloadCarrierMixin):
     # function specifically depends on the order.
     def __init__(
         self,
-        inplanes,
-        planes,
-        stride=1,
-        downsample=None,
-        cardinality=1,
-        base_width=64,
-        reduce_first=1,
-        dilation=1,
-        first_dilation=None,
-        act_layer=nn.ReLU,
-        norm_layer=nn.BatchNorm2d,
-        attn_layer=None,
-        aa_layer=None,
-        drop_block=None,
-        drop_path=None,
+        inplanes: int,
+        planes: int,
+        stride: int = 1,
+        downsample: Optional[nn.Module] = None,
+        cardinality: int = 1,
+        base_width: int = 64,
+        reduce_first: int = 1,
+        dilation: int = 1,
+        first_dilation: Optional[int] = None,
+        act_layer: nn.Module = nn.ReLU,
+        norm_layer: nn.Module = nn.BatchNorm2d,
+        attn_layer: Optional[nn.Module] = None,
+        aa_layer: Optional[nn.Module] = None,
+        drop_block: Optional[nn.Module] = None,
+        drop_path: Optional[nn.Module] = None,
         # Not actually optional. But the `make_blocks` function call in
         # `timm` was based on the argument order. So we have to make it
         # compatible by adding this argument at the end.
@@ -129,14 +129,7 @@ class HATBasicBlock(BasicBlock, HATPayloadCarrierMixin):
             )
 
         assert pld.unmasked_data is not None
-        pld = HATPayload(
-            data=pld.unmasked_data + shortcut.data,
-            masker=pld.masker,
-            task_id=pld.task_id,
-            mask_scale=pld.mask_scale,
-            locked_task_ids=pld.locked_task_ids,
-            prev_maskers=pld.prev_maskers,
-        )
+        pld += shortcut
         pld = pld.forward_by(self.act2)
         return pld
 
@@ -212,6 +205,7 @@ class ResNet_(ResNet):
                     f"for ResNet with stem_type {stem_type}."
                 )
             else:
+                self.conv1: nn.Conv2d
                 self.conv1 = nn.Conv2d(
                     in_chans,
                     self.conv1.out_channels,
@@ -235,7 +229,7 @@ class HATResNet(ResNet_, HATPayloadCarrierMixin):
         self,
         layers: Sequence[int],
         hat_config: HATConfig,
-        block: HATPayloadCarrierMixin = HATBasicBlock,
+        block: type[HATPayloadCarrierMixin] = HATBasicBlock,
         num_classes: int = 1000,
         in_chans: int = 3,
         output_stride: int = 32,
@@ -337,7 +331,7 @@ def _create_resnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(ResNet_, variant, pretrained, **kwargs)
 
 
-def _create_resnet_hat(variant, pretrained=False, **kwargs):
+def _create_hat_resnet(variant, pretrained=False, **kwargs):
     """Helper method to create a HAT-ResNet model with a given variant"""
     return build_model_with_cfg(HATResNet, variant, pretrained, **kwargs)
 
@@ -366,7 +360,7 @@ def hat_resnet18(pretrained=False, **kwargs):
         block=HATBasicBlock,
         **kwargs,
     )
-    return _create_resnet_hat(
+    return _create_hat_resnet(
         variant="hat_resnet18",
         pretrained=pretrained,
         **model_kwargs,
@@ -382,7 +376,7 @@ def hat_resnet18s(pretrained=False, **kwargs):
         reduced_conv1_kernel=True,
         **kwargs,
     )
-    return _create_resnet_hat(
+    return _create_hat_resnet(
         variant="hat_resnet18s",
         pretrained=pretrained,
         **model_kwargs,
@@ -413,7 +407,7 @@ def hat_resnet34(pretrained=False, **kwargs):
         block=HATBasicBlock,
         **kwargs,
     )
-    return _create_resnet_hat(
+    return _create_hat_resnet(
         variant="hat_resnet34",
         pretrained=pretrained,
         **model_kwargs,
@@ -429,7 +423,7 @@ def hat_resnet34s(pretrained=False, **kwargs):
         reduced_conv1_kernel=True,
         **kwargs,
     )
-    return _create_resnet_hat(
+    return _create_hat_resnet(
         variant="hat_resnet34s",
         pretrained=pretrained,
         **model_kwargs,

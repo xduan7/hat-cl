@@ -41,6 +41,7 @@ class _HATMakerRegulator:
 
     @property
     def quota(self) -> float:
+        """The quota (number of masks) of the masker for each task."""
         return self.masker.num_features / self.masker.num_tasks
 
     def get_reg_term(
@@ -48,6 +49,16 @@ class _HATMakerRegulator:
         strat: str,
         **kwargs: Any,
     ) -> torch.Tensor:
+        """Get the regularization term.
+
+        Args:
+            strat: The name of the strategy for regularization.
+            kwargs: The keyword arguments to pass to the strategy.
+
+        Returns:
+            The regularization term.
+
+        """
         if strat == "uniform":
             return self.get_uniform_reg_term(**kwargs)
         # elif strat == "heuristic":

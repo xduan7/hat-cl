@@ -6,9 +6,14 @@ import hat.timm_models
 from hat.types_ import HATConfig
 from tests.constants import NUM_TASKS
 
-from . import RESNET_INPUT_SHAPE, RESNET_S_INPUT_SHAPE, _TestHATNetworkABC
+from . import DEBUG, _TestHATNetworkABC
 
 HAT_CONFIG = HATConfig(num_tasks=NUM_TASKS)
+
+# The shape of the input are the minimum size that can produces features of
+# size (B, C, 2, 2) for different models, in order to save time.
+RESNET_INPUT_SHAPE = (3, 4, 4) if DEBUG else (3, 33, 33)
+RESNET_S_INPUT_SHAPE = (3, 4, 4) if DEBUG else (3, 17, 17)
 
 
 class TestHATResNet18(unittest.TestCase, _TestHATNetworkABC):
