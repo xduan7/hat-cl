@@ -2,6 +2,7 @@ import unittest
 from typing import Iterable
 
 from tests.constants import DEBUG
+
 from . import _TestNetworkABC
 
 RESNET_S_INPUT_SHAPE = (3, 4, 4) if DEBUG else (3, 17, 17)

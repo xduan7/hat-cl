@@ -7,6 +7,7 @@ help:
 	@echo "    type:        check the type hints"
 	@echo "    doc:         check the docstring"
 	@echo "    check:       run format, lint, type, doc"
+	@echo "    publish:     publish to pypi"
 
 test:
 	@echo ">>> Unit testing with pytest ..."
@@ -49,3 +50,7 @@ check:
 	@$(MAKE) lint
 	@$(MAKE) type
 	@$(MAKE) doc
+
+publish:
+	@poetry build
+	@poetry publish
