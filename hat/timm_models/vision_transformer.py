@@ -39,7 +39,7 @@ from hat.types_ import ForgetResult, HATConfig
 
 from .layers import HATMlp, HATPatchEmbed
 
-default_cfg = {
+default_cfgs = {
     "hat_vit_tiny_patch16_224": timm_default_cfgs["vit_tiny_patch16_224"],
     "hat_vit_tiny_patch16_224_in21k": timm_default_cfgs[
         "vit_tiny_patch16_224_in21k"
@@ -465,6 +465,7 @@ class HATVisionTransformer(HATPayloadCarrierMixin):
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path, prefix=""):
         """Load pretrained weights from the given checkpoint path."""
+        print(f"Loading pretrained weights from {checkpoint_path}")
         _load_weights(self, checkpoint_path, prefix)
 
     @torch.jit.ignore
@@ -709,18 +710,17 @@ def _load_weights(
         embed_conv_w = _n2p(w[f"{prefix}embedding/kernel"])
     else:
         embed_conv_w = adapt_input_conv(
-            model.patch_embed.proj.conv2d.weight.shape[1],
+            model.patch_embed.proj.weight.shape[1],
             _n2p(w[f"{prefix}embedding/kernel"]),
         )
-    model.patch_embed.proj.conv2d.weight.copy_(embed_conv_w)
-    model.patch_embed.proj.conv2d.bias.copy_(
-        _n2p(w[f"{prefix}embedding/bias"])
-    )
-    model.cls_token.copy_(_n2p(w[f"{prefix}cls"], t=False))
+    model.patch_embed.proj.weight.copy_(embed_conv_w)
+    model.patch_embed.proj.bias.copy_(_n2p(w[f"{prefix}embedding/bias"]))
+    for _cls_token in model.cls_token:
+        _cls_token.copy_(_n2p(w[f"{prefix}cls"], t=False))
     pos_embed_w = _n2p(
         w[f"{prefix}Transformer/posembed_input/pos_embedding"], t=False
     )
-    if pos_embed_w.shape != model.pos_embed.non_task_param.shape:
+    if pos_embed_w.shape != model.pos_embed[0].shape:
         pos_embed_w = resize_pos_embed(
             # resize pos embedding when different size from pretrained weights
             pos_embed_w,
@@ -728,7 +728,8 @@ def _load_weights(
             getattr(model, "num_prefix_tokens", 1),
             model.patch_embed.grid_size,
         )
-    model.pos_embed.copy_(pos_embed_w)
+    for _pos_embed in model.pos_embed:
+        _pos_embed.copy_(pos_embed_w)
 
     if isinstance(model.norm, TaskIndexedLayerNorm):
         _load_ln(
@@ -766,35 +767,35 @@ def _load_weights(
             block.norm1.bias.copy_(
                 _n2p(w[f"{block_prefix}LayerNorm_0/bias"]),
             )
-        block.attn.qkv_q.linear.weight.copy_(
+        block.attn.qkv_q.weight.copy_(
             _n2p(w[f"{mha_prefix}query/kernel"], t=False).flatten(1).T,
         )
-        block.attn.qkv_k.linear.weight.copy_(
+        block.attn.qkv_k.weight.copy_(
             _n2p(w[f"{mha_prefix}key/kernel"], t=False).flatten(1).T,
         )
-        block.attn.qkv_v.linear.weight.copy_(
+        block.attn.qkv_v.weight.copy_(
             _n2p(w[f"{mha_prefix}value/kernel"], t=False).flatten(1).T,
         )
-        block.attn.qkv_q.linear.bias.copy_(
+        block.attn.qkv_q.bias.copy_(
             _n2p(w[f"{mha_prefix}query/bias"], t=False).reshape(-1),
         )
-        block.attn.qkv_k.linear.bias.copy_(
+        block.attn.qkv_k.bias.copy_(
             _n2p(w[f"{mha_prefix}key/bias"], t=False).reshape(-1),
         )
-        block.attn.qkv_v.linear.bias.copy_(
+        block.attn.qkv_v.bias.copy_(
             _n2p(w[f"{mha_prefix}value/bias"], t=False).reshape(-1),
         )
-        block.attn.proj.linear.weight.copy_(
+        block.attn.proj.weight.copy_(
             _n2p(w[f"{mha_prefix}out/kernel"]).flatten(1),
         )
-        block.attn.proj.linear.bias.copy_(
+        block.attn.proj.bias.copy_(
             _n2p(w[f"{mha_prefix}out/bias"]),
         )
         for r in range(2):
-            getattr(block.mlp, f"fc{r + 1}").linear.weight.copy_(
+            getattr(block.mlp, f"fc{r + 1}").weight.copy_(
                 _n2p(w[f"{block_prefix}MlpBlock_3/Dense_{r}/kernel"])
             )
-            getattr(block.mlp, f"fc{r + 1}").linear.bias.copy_(
+            getattr(block.mlp, f"fc{r + 1}").bias.copy_(
                 _n2p(w[f"{block_prefix}MlpBlock_3/Dense_{r}/bias"])
             )
         if isinstance(block.norm2, TaskIndexedLayerNorm):
@@ -804,10 +805,10 @@ def _load_weights(
                 _n2p(w[f"{block_prefix}LayerNorm_2/bias"]),
             )
         else:
-            block.norm2.weight.copy_(
+            block.norm2.copy_(
                 _n2p(w[f"{block_prefix}LayerNorm_2/scale"]),
             )
-            block.norm2.bias.copy_(
+            block.norm2.copy_(
                 _n2p(w[f"{block_prefix}LayerNorm_2/bias"]),
             )
 
@@ -820,7 +821,10 @@ def _create_hat_vision_transformer(variant, pretrained=False, **kwargs):
         )
     pretrained_cfg = resolve_pretrained_cfg(
         variant,
-        pretrained_cfg=kwargs.pop("pretrained_cfg", None),
+        pretrained_cfg=kwargs.pop(
+            "pretrained_cfg",
+            default_cfgs.pop(variant, None),
+        ),
     )
     model = build_model_with_cfg(
         HATVisionTransformer,

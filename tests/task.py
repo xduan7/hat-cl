@@ -17,6 +17,7 @@ from hat.utils import forget_task, prune_hat_module
 from .constants import (
     BATCH_SIZE,
     DEVICE,
+    MAX_TRN_MASK_SCALE,
     NUM_TASKS,
     OPTIMIZERS,
     TRN_MASK_SCALE,
@@ -35,6 +36,7 @@ def _compare_modules(
     return True
 
 
+@torch.no_grad()
 def check_forward(
     test_case: unittest.TestCase,
     input_shape: Iterable[int],
@@ -58,6 +60,43 @@ def check_forward(
     test_case.assertIsNotNone(
         _output,
         f"The module cannot forward the input data. \nModule: {_module}",
+    )
+
+
+@torch.no_grad()
+def check_loading(
+    test_case: unittest.TestCase,
+    input_shape: Iterable[int],
+    module: nn.Module,
+    ref_module: nn.Module,
+    is_task_dependent: bool,
+    tol_kwargs: dict = None,
+    device: torch.device = DEVICE,
+):
+    """Check if the module can produce the same output as the reference
+    module after loading the parameters from timm.
+    """
+    _module = module.to(device)
+    _ref_module = ref_module.to(device)
+    _input_data = torch.rand(BATCH_SIZE, *input_shape).to(device)
+    if is_task_dependent:
+        _input = HATPayload(
+            data=_input_data,
+            task_id=0,
+            mask_scale=MAX_TRN_MASK_SCALE,
+        )
+        _output = _input.forward_by(_module)
+        _output = _output.data
+
+    else:
+        _input = _input_data
+        _output = _module(_input)
+    _output_ref = _ref_module(_input_data)
+    _tol_kwargs = tol_kwargs or {}
+    test_case.assertTrue(
+        torch.allclose(_output, _output_ref, **_tol_kwargs),
+        f"The module cannot produce the same output as the reference "
+        f"module after loading the parameters from timm.",
     )
 
 
@@ -95,13 +134,6 @@ def check_remembering(
                 )
                 __data = __pld.forward_by(_module).data
                 __data_ref = __pld.forward_by(__module_ref).data
-                print(
-                    f"Making sure that the module remembers the output of previous tasks after training on the current one."
-                )
-                print(__data)
-                print(__data_ref)
-                print(__data - __data_ref)
-
                 test_case.assertTrue(
                     torch.allclose(__data, __data_ref),
                     f"The output of previous task {__prev_task_id} "

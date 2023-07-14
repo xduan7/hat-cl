@@ -91,8 +91,6 @@ def check_from_base_conversion(
             task_id=_task_id,
             mask_scale=TRN_MASK_SCALE if __training else None,
         )
-        print(_module)
-        print(_module_ref)
         _data = _module.forward(_pld.data)
         _data_ref = _pld.forward_by(_module_ref).data
         test_case.assertTrue(

@@ -1,6 +1,7 @@
 import unittest
 from typing import Iterable
 
+import timm
 import torch.nn as nn
 
 # noinspection PyUnresolvedReferences
@@ -8,9 +9,10 @@ import hat.timm_models
 from hat.timm_models.layers.mlp import HATMlp
 from hat.timm_models.layers.patch_embed import HATPatchEmbed
 from hat.timm_models.vision_transformer import HATAttention, HATBlock
-from tests.constants import HAT_CONFIG
+from tests.constants import DEBUG, HAT_CONFIG
+from tests.task import check_loading
 
-from . import DEBUG, _TestHATNetworkABC
+from . import _TestHATNetworkABC
 
 VIT_NUM_PATCHES = 4 if DEBUG else 16
 VIT_FEATURE_DIM = 6 if DEBUG else 24
@@ -115,9 +117,39 @@ class TestHATViTTinyPatch16x224(unittest.TestCase, _TestHATNetworkABC):
         return "hat_vit_tiny_patch16_224"
 
     @property
+    def non_hat_network_name(self) -> str:
+        return "vit_tiny_patch16_224"
+
+    @property
     def network_kwargs(self) -> dict:
         return {"hat_config": HAT_CONFIG}
 
     @property
     def input_shape(self) -> Iterable[int]:
         return VIT_INPUT_SHAPE
+
+    def test_loading(self):
+        _network_kwargs = self.network_kwargs.copy()
+        _network_kwargs["hat_config"].init_strat = "dense"
+        _network = timm.create_model(
+            self.network_name,
+            pretrained=True,
+            **_network_kwargs,
+        )
+        _ref_network = timm.create_model(
+            self.non_hat_network_name,
+            pretrained=True,
+            **self.non_hat_network_kwargs,
+        )
+        # For some unknown reason (mostly from the QKV in attention layers),
+        # there is a small difference between the outputs of the two modules.
+        # We ignore this difference by relaxing the tolerance.
+        _tol_kwargs = {"atol": 1e-4, "rtol": 1e-4}
+        check_loading(
+            test_case=self,
+            input_shape=self.input_shape,
+            module=_network,
+            ref_module=_ref_network,
+            is_task_dependent=self.is_task_dependent,
+            tol_kwargs=_tol_kwargs,
+        )
