@@ -20,9 +20,12 @@ def get_hat_mask_scale(
     - `_get_exponential_hat_mask_scale`
     - `_get_cosine_hat_mask_scale`
 
+    For the case of `strat="constant"`, the scale is simply set to
+    `max_trn_mask_scale`.
+
     Args:
         strat: The scaling strategy to use. Can be one of the following:
-            "linear", "exponential", "cosine".
+            "linear", "exponential", "cosine" or "constant".
         max_trn_mask_scale: The maximum scale of the HAT attention mask.
         **kwargs: Keyword arguments to be passed to the scaling strategy.
 
@@ -45,6 +48,8 @@ def get_hat_mask_scale(
             max_trn_mask_scale=max_trn_mask_scale,
             **kwargs,
         )
+    elif strat == "constant":
+        return max_trn_mask_scale
     else:
         raise ValueError(f"Unknown mask scaling strategy: {strat}.")
 
