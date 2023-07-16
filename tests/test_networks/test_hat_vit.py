@@ -1,4 +1,5 @@
 import unittest
+from abc import ABC
 from typing import Iterable
 
 import timm
@@ -111,15 +112,7 @@ class TestHATBlock(unittest.TestCase, _TestHATNetworkABC):
         return VIT_HIDDEN_SHAPE
 
 
-class TestHATViTTinyPatch16x224(unittest.TestCase, _TestHATNetworkABC):
-    @property
-    def network_name(self) -> str:
-        return "hat_vit_tiny_patch16_224"
-
-    @property
-    def non_hat_network_name(self) -> str:
-        return "vit_tiny_patch16_224"
-
+class _TestHATViT(_TestHATNetworkABC, ABC):
     @property
     def network_kwargs(self) -> dict:
         return {"hat_config": HAT_CONFIG}
@@ -153,3 +146,23 @@ class TestHATViTTinyPatch16x224(unittest.TestCase, _TestHATNetworkABC):
             is_task_dependent=self.is_task_dependent,
             tol_kwargs=_tol_kwargs,
         )
+
+
+class TestHATViTTinyPatch16x224(unittest.TestCase, _TestHATViT):
+    @property
+    def network_name(self) -> str:
+        return "hat_vit_tiny_patch16_224"
+
+    @property
+    def non_hat_network_name(self) -> str:
+        return "vit_tiny_patch16_224"
+
+
+class TestHATViTBasePatch16x224(unittest.TestCase, _TestHATViT):
+    @property
+    def network_name(self) -> str:
+        return "hat_vit_base_patch16_224"
+
+    @property
+    def non_hat_network_name(self) -> str:
+        return "vit_base_patch16_224"

@@ -813,7 +813,11 @@ def _load_weights(
             )
 
 
-def _create_hat_vision_transformer(variant, pretrained=False, **kwargs):
+def _create_hat_vision_transformer(
+    variant: str,
+    pretrained=False,
+    **kwargs,
+) -> HATVisionTransformer:
     """Create a HAT-Vision-Transformer model."""
     if kwargs.get("features_only", None):
         raise RuntimeError(
@@ -835,11 +839,15 @@ def _create_hat_vision_transformer(variant, pretrained=False, **kwargs):
         pretrained_custom_load="npz" in pretrained_cfg["url"],
         **kwargs,
     )
+    assert isinstance(model, HATVisionTransformer)
     return model
 
 
 @register_model
-def hat_vit_tiny_patch16_224(pretrained=False, **kwargs):
+def hat_vit_tiny_patch16_224(
+    pretrained=False,
+    **kwargs,
+) -> HATVisionTransformer:
     """HAT-ViT-Tiny (Vit-Ti/16)"""
     model_kwargs = dict(
         patch_size=16,
@@ -857,7 +865,10 @@ def hat_vit_tiny_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def hat_vit_tiny_patch16_224_in21k(pretrained=False, **kwargs):
+def hat_vit_tiny_patch16_224_in21k(
+    pretrained=False,
+    **kwargs,
+) -> HATVisionTransformer:
     """HAT-ViT-Tiny (Vit-Ti/16).
     ImageNet-21k weights @ 224x224; this model has valid 21k classifier head
     and no representation (pre-logits) layer
@@ -873,5 +884,29 @@ def hat_vit_tiny_patch16_224_in21k(pretrained=False, **kwargs):
         variant="hat_vit_tiny_patch16_224_in21k",
         pretrained=pretrained,
         **model_kwargs,
+    )
+    return model
+
+
+@register_model
+def hat_vit_base_patch16_224(
+    pretrained=False,
+    **kwargs,
+) -> VisionTransformer:
+    """HAT-ViT-Base (ViT-B/16).
+    ImageNet-1k weights fine-tuned from in21k @ 224x224, source
+    https://github.com/google-research/vision_transformer.
+    """
+    model_args = dict(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        **kwargs,
+    )
+    model = _create_hat_vision_transformer(
+        variant="vit_base_patch16_224",
+        pretrained=pretrained,
+        **model_args,
     )
     return model
