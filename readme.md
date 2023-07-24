@@ -12,6 +12,25 @@ HAT-CL aims to rectify these issues with a user-friendly design and a host of ne
 - Simple transformation of PyTorch modules to HAT modules with a single line of code.
 - Out-of-the-box HAT networks integrated with [timm](https://github.com/huggingface/pytorch-image-models).
 
+Link to the paper: [HAT-CL: A Hard-Attention-to-the-Task PyTorch Library for Continual Learning](https://arxiv.org/abs/2307.09653)
+
+
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+- [Modules](#modules)
+- [Networks](#networks)
+- [Examples](#examples)
+- [Limitations](#limitations)
+- [To-Do](#todo)
+- [Citation](#citation)
+- [Authors](#authors)
+
+
 ---
 
 ## Quick Start
@@ -32,11 +51,9 @@ poetry add hat-cl
 
 ### Basic Usage
 
-To use HAT modules, simply swap the generic PyTorch modules for their HAT counterparts. 
-For example, replace `torch.nn.Linear` with `hat.modules.HATLinear`, and `torch.nn.Conv2d` with `hat.modules.HATConv2d`. 
-The HAT modules take instances of `hat.HATPayload` as input and output, wrapping the tensor, task ID, and other essential variables for the HAT mechanism.
+To use HAT modules, swap generic PyTorch modules for their HAT counterparts (for instance, replace `torch.nn.Linear` with `hat.modules.HATLinear`. More examples in [Modules](#modules)). HAT modules process `hat.HATPayload` instances as input and output, containing tensor, task ID, and other HAT-mechanism essential variables.
 
-Below is a basic example of a 2-layer MLP:
+Here's a simple 2-layer MLP example:
 
 ```python3
 import torch
@@ -121,19 +138,20 @@ Here are the currently available timm-compatible HAT networks:
 
 ## Examples
 
-- [Continual Learning](examples%2Fcontinual_learning.ipynb)
-- [Feature Importance](examples%2Ffeature_importance.ipynb)
+- [Continual Learning](examples%2Fcontinual_learning.ipynb): A simple example of continual learning with HAT-CL on split CIFAR-10.
+- [Feature Importance](examples%2Ffeature_importance.ipynb): Feature importance by input masking with hard attention on MNIST.
+- [Mask Initialization and Scaling](examples%2Fmask_initialization_and_scaling.ipynb): Investigating the effects of mask initialization (default v.s. dense) and scaling (default v.s. cosine). 
+- [Mask Regularization V.S. Compensation](examples%2Fmask_regularization_vs_compensation.ipynb): Comparing the effects of mask regularization and compensation on the HAT mechanism.
 
 
 ---
 
-
 ## Limitations
 
-While HAT-CL is designed to be compatible with all PyTorch features, there are some inherent limitations due to the nature of the HAT mechanism:
+HAT-CL, while designed for broad compatibility with PyTorch, faces some constraints due to the inherent characteristics of the HAT mechanism:
 
-- **Optimizer Re-initialization**: To prevent carryover of momentum from previous tasks, it is recommended to refresh the optimizer state after each task. This can be achieved by simply re-initializing the optimizer. 
-- **Weight Decay (L2 Regularization)**: Weight decay is not compatible with the HAT mechanism due to its gradient modification process. As this occurs after the HAT mechanism modifies the gradient, it may interfere with parameters that should be locked out by the HAT mechanism, leading to potential forgetting. This includes the `weight_decay` parameter in the optimizer, or any optimizer that utilizes weight decay (e.g. AdamW).
+- **Optimizer Re-initialization**: We recommend refreshing the optimizer state after each task to avoid momentum carryover from prior tasks. This can be easily done by re-initializing the optimizer.
+- **Weight Decay (L2 Regularization)**: Weight decay isn't compatible with HAT due to its gradient altering process, which can interfere with parameters meant to be blocked by the HAT mechanism and cause potential forgetting. This includes the `weight_decay` optimizer parameter, and any optimizer using weight decay, such as AdamW.
 
 
 ---
@@ -143,10 +161,29 @@ While HAT-CL is designed to be compatible with all PyTorch features, there are s
 
 - [ ] Add example notebook for pruning
 - [ ] Package paper for implementation details
+- [ ] Add CLOM notebook example
+- [ ] Link PyPI package to GitHub repo
 
 
 ---
 
+## Citation
+
+If you use HAT-CL in your research, please cite:
+
+```bibtex
+@misc{duan2023hatcl,
+    title={HAT-CL: A Hard-Attention-to-the-Task PyTorch Library for Continual Learning}, 
+    author={Xiaotian Duan},
+    year={2023},
+    eprint={2307.09653},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG}
+}
+```
+
+
+---
 
 ## Authors
 

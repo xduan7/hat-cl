@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hat-cl"
-version = "0.1.0"
+version = "0.1.0.post1"
 description = "HAT (Hard Attention to the Task) Modules for Continual Learning"
 authors = ["Xiaotian Duan <xduan7@gmail.com>"]
 license = "MIT"
@@ -39,6 +39,7 @@ fastapi = "^0.86.0"
 lightning = "^2.0.0"
 rich = "^13.3.2"
 pandas = "^1.5.3"
+lightning-flash = "^0.8.2"
 
 [build-system]
 requires = ["poetry-core"]
